@@ -1,0 +1,171 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Template to Create a document DB parameter group, subnet group and cluster
+
+Parameters:
+  VPC:
+    Type: String
+    Description: The VPC to create the cluster
+    Default: vpc-0cdb651f311675911
+
+  PrivateSubnet01:
+    Type: String
+    Description: The subnet for the DB cluster
+    Default: subnet-0c7c916020af48a64
+
+  PrivateSubnet02:
+    Type: String
+    Description: The subnet for the DB cluster
+    Default: subnet-018cf5c8a1974664b
+  
+  availabilityZone:
+    Type: String
+    Description: The availability zone for the DB cluster
+    Default: us-east-1a
+
+  MasterUsername:
+    Type: String
+    Description: The username for our database.
+    Default: b2badmin
+  
+  MasterUserPassword:
+    Type: String
+    Description: The password for the database.
+    "NoEcho": true
+
+  DBIdentifier:
+    Type: String
+    Description: The name used for our database.
+
+Resources:
+   DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "DB instances security group"
+      GroupName: "b2b-firewall-db-instance-SG"
+      VpcId: !Ref VPC
+      SecurityGroupIngress: 
+        - 
+          CidrIp: "0.0.0.0/0"
+          FromPort: 22017
+          IpProtocol: "tcp"
+          ToPort: 22017
+      SecurityGroupEgress: 
+        - 
+          CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+      
+   DBSubnetGroup: 
+    Type: AWS::DocDB::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: "b2b firewall document db subnet group"
+      DBSubnetGroupName: "b2b-firewall-db-prod-subnet-group"
+      SubnetIds: 
+        - !Ref PrivateSubnet01
+        - !Ref PrivateSubnet02
+      Tags: 
+        - Key: Name
+          Value: b2b-firewall-db-prod-subnet-group
+        - Key: createdBy
+          Value: Ron Weisgross
+        - Key: Project
+          Value: b2b-firewall
+        - Key: Environment
+          Value: prod
+
+   DBParameterGroup:
+    Type: AWS::DocDB::DBClusterParameterGroup
+    Properties:
+      Description: "our b2b firewall document db parameter group"
+      Family: docdb3.6
+      Name: b2b-firewall-db-prod-parameter-group
+      Parameters: 
+        audit_logs: "disabled"
+        tls: "enabled"
+        ttl_monitor: "enabled"
+      Tags: 
+        - Key: Name
+          Value: b2b-firewall-db-prod-parameter-group
+        - Key: createdBy
+          Value: Ron Weisgross
+        - Key: Project
+          Value: b2b-firewall
+        - Key: Environment
+          Value: prod
+
+   DBCluster:
+    Type: AWS::DocDB::DBCluster
+    Properties: 
+      BackupRetentionPeriod : 5
+      DeletionProtection : true
+      DBClusterIdentifier : !Ref DBIdentifier
+      DBClusterParameterGroupName : !Ref DBParameterGroup
+      DBSubnetGroupName : !Ref DBSubnetGroup
+      MasterUsername : !Ref MasterUsername
+      MasterUserPassword : !Ref MasterUserPassword
+      Port : 27017
+      PreferredBackupWindow : "23:00-23:59"
+      PreferredMaintenanceWindow : "sun:00:00-sun:05:00"
+      VpcSecurityGroupIds:
+        - !Ref DBSecurityGroup
+      StorageEncrypted : true
+      Tags: 
+        - Key: Name
+          Value: !Ref DBIdentifier
+        - Key: createdBy
+          Value: Ron Weisgross
+        - Key: Project
+          Value: b2b-firewall
+        - Key: Environment
+          Value: prod
+
+   DBInstance1:
+    Type: AWS::DocDB::DBInstance
+    Properties:
+      AutoMinorVersionUpgrade: true
+      AvailabilityZone: !Ref availabilityZone
+      DBClusterIdentifier: !Ref DBCluster
+      DBInstanceClass: "db.r5.large"
+      DBInstanceIdentifier: "b2b-firewall-prod-cluster-instance-1"
+      PreferredMaintenanceWindow: "sun:00:00-sun:05:00"
+      Tags: 
+        - Key: Name
+          Value: b2b-firewall-prod-cluster-instance-1
+        - Key: createdBy
+          Value: Ron Weisgross
+        - Key: Project
+          Value: b2b-firewall
+        - Key: Environment
+          Value: prod
+  
+   DBInstance2:
+    Type: AWS::DocDB::DBInstance
+    Properties:
+      AutoMinorVersionUpgrade: true
+      AvailabilityZone: !Ref availabilityZone
+      DBClusterIdentifier: !Ref DBCluster
+      DBInstanceClass: "db.r5.large"
+      DBInstanceIdentifier: "b2b-firewall-prod-cluster-instance-2"
+      PreferredMaintenanceWindow: "sun:00:00-sun:05:00"
+      Tags: 
+        - Key: Name
+          Value: b2b-firewall-prod-cluster-instance-2
+        - Key: createdBy
+          Value: Ron Weisgross
+        - Key: Project
+          Value: b2b-firewall
+        - Key: Environment
+          Value: prod
+
+Outputs:
+   Cluster:
+    Description: The DB Cluster Name
+    Value: !Ref DBCluster
+    
+   SubnetGroup:
+    Description: The db subnet group name 
+    Value: !Ref DBSubnetGroup
+
+   ParameterGroup:
+    Description: The db subnet group name 
+    Value: !Ref DBParameterGroup

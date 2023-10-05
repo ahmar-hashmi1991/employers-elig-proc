@@ -1,0 +1,68 @@
+{
+    "name": "employers-elig-proc",
+    "description": "Employers eligibility file processing application",
+    "version": "1.0.0",
+    "private": true,
+    "dependencies": {
+        "ajv": "^8.11.0",
+        "ajv-keywords": "^5.1.0",
+        "aws-sdk": "^2.1051.0",
+        "aws-serverless-express": "^3.4.0",
+        "bluebird": "^3.7.2",
+        "body-parser": "^1.19.0",
+        "crypto": "^1.0.1",
+        "csv-parser": "^2.3.3",
+        "decompress": "^4.2.1",
+        "express": "^4.17.1",
+        "fixed-width-parser": "^2.5.0",
+        "got": "^11.5.2",
+        "jsforce": "^1.9.3",
+        "json-diff": "^0.5.4",
+        "jsonwebtoken": "^8.5.1",
+        "jwks-rsa": "^3.0.0",
+        "libphonenumber-js": "^1.9.24",
+        "lodash": "^4.17.21",
+        "moment": "^2.29.1",
+        "mongoose": "^5.13.13",
+        "mustache": "^4.2.0",
+        "mysql2": "^2.1.0",
+        "netmask": "^2.0.2",
+        "node-cache": "^5.1.2",
+        "node-xlsx": "^0.21.0",
+        "nodemailer": "^6.5.0",
+        "object-mapper": "^6.2.0",
+        "openpgp": "^5.5.0",
+        "papaparse": "^5.3.1",
+        "parse-multipart": "^1.0.4",
+        "passport": "^0.5.0",
+        "passport-saml": "^3.2.0",
+        "passport-saml-metadata": "^2.5.0",
+        "qs": "^6.9.6",
+        "redis": "^3.0.2",
+        "rxjs": "^7.5.5",
+        "ssh2": "^1.5.0",
+        "strip-bom-stream": "^4.0.0",
+        "uuid": "^8.3.0",
+        "winston": "^3.6.0",
+        "xlsx-populate": "^1.21.0"
+    },
+    "devDependencies": {
+        "@babel/plugin-proposal-class-properties": "^7.16.7",
+        "aws-sdk-mock": "^5.6.2",
+        "dotenv": "^16.0.0",
+        "jest": "^24.7.1",
+        "supertest": "^6.2.2"
+    },
+    "scripts": {
+        "test": "jest",
+        "simulate": "jest -t 'Verifies full run'"
+    },
+    "jest": {
+        "testEnvironment": "node"
+    },
+    "babel": {
+        "plugins": [
+            "@babel/plugin-proposal-class-properties"
+        ]
+    }
+}

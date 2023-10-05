@@ -1,0 +1,176 @@
+{
+    "event": {
+        "resource": "/reseller/{reseller_id}/saml",
+        "path": "/reseller/qs42Md/saml",
+        "httpMethod": "POST",
+        "headers": {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": "en-US,en;q=0.9",
+            "cache-control": "max-age=0",
+            "CloudFront-Forwarded-Proto": "https",
+            "CloudFront-Is-Desktop-Viewer": "true",
+            "CloudFront-Is-Mobile-Viewer": "false",
+            "CloudFront-Is-SmartTV-Viewer": "false",
+            "CloudFront-Is-Tablet-Viewer": "false",
+            "CloudFront-Viewer-ASN": "16509",
+            "CloudFront-Viewer-Country": "US",
+            "content-type": "application/x-www-form-urlencoded",
+            "Host": "ep-api.stage.mobile-glucometer.com",
+            "origin": "https://auth.uat.grandrounds.com",
+            "Referer": "https://auth.uat.grandrounds.com/",
+            "sec-ch-ua": "\"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"108\", \"Google Chrome\";v=\"108\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"macOS\"",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "cross-site",
+            "upgrade-insecure-requests": "1",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+            "Via": "2.0 8df31e7dadb269dc995f63f49e122fb6.cloudfront.net (CloudFront)",
+            "X-Amz-Cf-Id": "c63Rp7yZOjJL_ceZCQrKkdRBmiDuEUq_HIrng4_C25FqpxmYfdKfgA==",
+            "X-Amzn-Trace-Id": "Root=1-639b3937-564596783791724f3787159a",
+            "X-Forwarded-For": "137.83.202.22, 64.252.185.109",
+            "X-Forwarded-Port": "443",
+            "X-Forwarded-Proto": "https"
+        },
+        "multiValueHeaders": {
+            "Accept": [
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"
+            ],
+            "Accept-Encoding": [
+                "gzip, deflate, br"
+            ],
+            "Accept-Language": [
+                "en-US,en;q=0.9"
+            ],
+            "cache-control": [
+                "max-age=0"
+            ],
+            "CloudFront-Forwarded-Proto": [
+                "https"
+            ],
+            "CloudFront-Is-Desktop-Viewer": [
+                "true"
+            ],
+            "CloudFront-Is-Mobile-Viewer": [
+                "false"
+            ],
+            "CloudFront-Is-SmartTV-Viewer": [
+                "false"
+            ],
+            "CloudFront-Is-Tablet-Viewer": [
+                "false"
+            ],
+            "CloudFront-Viewer-ASN": [
+                "16509"
+            ],
+            "CloudFront-Viewer-Country": [
+                "US"
+            ],
+            "content-type": [
+                "application/x-www-form-urlencoded"
+            ],
+            "Host": [
+                "ep-api.stage.mobile-glucometer.com"
+            ],
+            "origin": [
+                "https://auth.uat.grandrounds.com"
+            ],
+            "Referer": [
+                "https://auth.uat.grandrounds.com/"
+            ],
+            "sec-ch-ua": [
+                "\"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"108\", \"Google Chrome\";v=\"108\""
+            ],
+            "sec-ch-ua-mobile": [
+                "?0"
+            ],
+            "sec-ch-ua-platform": [
+                "\"macOS\""
+            ],
+            "sec-fetch-dest": [
+                "document"
+            ],
+            "sec-fetch-mode": [
+                "navigate"
+            ],
+            "sec-fetch-site": [
+                "cross-site"
+            ],
+            "upgrade-insecure-requests": [
+                "1"
+            ],
+            "User-Agent": [
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+            ],
+            "Via": [
+                "2.0 8df31e7dadb269dc995f63f49e122fb6.cloudfront.net (CloudFront)"
+            ],
+            "X-Amz-Cf-Id": [
+                "c63Rp7yZOjJL_ceZCQrKkdRBmiDuEUq_HIrng4_C25FqpxmYfdKfgA=="
+            ],
+            "X-Amzn-Trace-Id": [
+                "Root=1-639b3937-564596783791724f3787159a"
+            ],
+            "X-Forwarded-For": [
+                "137.83.202.22, 64.252.185.109"
+            ],
+            "X-Forwarded-Port": [
+                "443"
+            ],
+            "X-Forwarded-Proto": [
+                "https"
+            ]
+        },
+        "queryStringParameters": null,
+        "multiValueQueryStringParameters": null,
+        "pathParameters": {
+            "reseller_id": "qs42Md"
+        },
+        "stageVariables": null,
+        "requestContext": {
+            "resourceId": "qtqky5",
+            "resourcePath": "/reseller/{reseller_id}/saml",
+            "operationName": "sso",
+            "httpMethod": "POST",
+            "extendedRequestId": "dMXgsHYxoAMFw4Q=",
+            "requestTime": "15/Dec/2022:15:11:51 +0000",
+            "path": "/reseller/qs42Md/saml",
+            "accountId": "139820419717",
+            "protocol": "HTTP/1.1",
+            "stage": "v1",
+            "domainPrefix": "ep-api",
+            "requestTimeEpoch": 1671117111424,
+            "requestId": "3b0c65a5-a6ff-474c-978d-27d45f46cde9",
+            "identity": {
+                "cognitoIdentityPoolId": null,
+                "accountId": null,
+                "cognitoIdentityId": null,
+                "caller": null,
+                "sourceIp": "137.83.202.22",
+                "principalOrgId": null,
+                "accessKey": null,
+                "cognitoAuthenticationType": null,
+                "cognitoAuthenticationProvider": null,
+                "userArn": null,
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+                "user": null
+            },
+            "domainName": "ep-api.stage.mobile-glucometer.com",
+            "apiId": "4rlxpgol9d"
+        },
+        "body": "SAMLResponse=PHNhbWxwOlJlc3BvbnNlIHhtbG5zOnNhbWxwPSJ1cm46b2FzaXM6bmFtZXM6dGM6U0FNTDoyLjA6cHJvdG9jb2wiIElEPSJfNGNkYWU1ZWEwODllZmYyZGUwMGEiIFZlcnNpb249IjIuMCIgSXNzdWVJbnN0YW50PSIyMDIyLTEyLTE1VDE1OjExOjUwLjg5MVoiIERlc3RpbmF0aW9uPSJodHRwczovL2VwLWFwaS5zdGFnZS5tb2JpbGUtZ2x1Y29tZXRlci5jb20vcmVzZWxsZXIvcXM0Mk1kL3NhbWwiPjxzYW1sOklzc3VlciB4bWxuczpzYW1sPSJ1cm46b2FzaXM6bmFtZXM6dGM6U0FNTDoyLjA6YXNzZXJ0aW9uIj51cm46YXV0aC51YXQuZ3JhbmRyb3VuZHMuY29tPC9zYW1sOklzc3Vlcj48U2lnbmF0dXJlIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwLzA5L3htbGRzaWcjIj48U2lnbmVkSW5mbz48Q2Fub25pY2FsaXphdGlvbk1ldGhvZCBBbGdvcml0aG09Imh0dHA6Ly93d3cudzMub3JnLzIwMDEvMTAveG1sLWV4Yy1jMTRuIyIvPjxTaWduYXR1cmVNZXRob2QgQWxnb3JpdGhtPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwLzA5L3htbGRzaWcjcnNhLXNoYTEiLz48UmVmZXJlbmNlIFVSST0iI180Y2RhZTVlYTA4OWVmZjJkZTAwYSI%2BPFRyYW5zZm9ybXM%2BPFRyYW5zZm9ybSBBbGdvcml0aG09Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvMDkveG1sZHNpZyNlbnZlbG9wZWQtc2lnbmF0dXJlIi8%2BPFRyYW5zZm9ybSBBbGdvcml0aG09Imh0dHA6Ly93d3cudzMub3JnLzIwMDEvMTAveG1sLWV4Yy1jMTRuIyIvPjwvVHJhbnNmb3Jtcz48RGlnZXN0TWV0aG9kIEFsZ29yaXRobT0iaHR0cDovL3d3dy53My5vcmcvMjAwMC8wOS94bWxkc2lnI3NoYTEiLz48RGlnZXN0VmFsdWU%2BOXMrYmkyb3JGVHdROWZhMU01emZJcUZYOEc0PTwvRGlnZXN0VmFsdWU%2BPC9SZWZlcmVuY2U%2BPC9TaWduZWRJbmZvPjxTaWduYXR1cmVWYWx1ZT5pRUdjYTMzUnBLSDNKZ2pkNHQwUkJCeXRMUmFIRmFtODg2dDlhZU5MWmh0dUxwOWJOODdJMWF1R3lCa01PYXZ6NlVQUEFLTDQ2eTFnZTB3ZmdKbmptcmlUTWNjaTVtdmJpZW54WHpENzdvK0xoT2s0d3l1Mk12QXdqZWwvQk1sWnBGeUtvUm1NN0I4ak9UY2xYWERMUVRrWHB3byt5ZndJckV0WUVzOXNCNk9ncURBdGk4bWZ4SW0zSjhpNjljNXh2eFJrWTRVaEVYcDBCUHc1UUlDRnRCVXRhenJtTHBITjZCdFdPSXdPQjFBaCs4aVFXVGhxQjROcjBlTWl6alBmdUhPOFZwN205NjdZdWZ2WFgxL0NtbDVYOXhmSmY1UXlKTVBrdzJhdWdadFR5SDFJOEExbkZ5REdWMExCMWxsMFVkU2dvclJwbjMxTkV1M3gzWFRUYmc9PTwvU2lnbmF0dXJlVmFsdWU%2BPEtleUluZm8%2BPFg1MDlEYXRhPjxYNTA5Q2VydGlmaWNhdGU%2BTUlJRHhUQ0NBcTJnQXdJQkFnSVVQMWJnQTBQNTVEdmc4WUFlbHZNWitjTGJuUU13RFFZSktvWklodmNOQVFFTEJRQXdjakVMTUFrR0ExVUVCaE1DVlZNeEN6QUpCZ05WQkFnTUFrTkJNUll3RkFZRFZRUUhEQTFUWVc0Z1JuSmhibU5wYzJOdk1Sc3dHUVlEVlFRS0RCSkhjbUZ1WkNCU2IzVnVaSE1zSUVsdVl5NHhJVEFmQmdOVkJBTU1HR0YxZEdndWRXRjBMbWR5WVc1a2NtOTFibVJ6TG1OdmJUQWVGdzB5TURBME1qa3hOekk0TkRWYUZ3MHlOVEEwTWpneE56STRORFZhTUhJeEN6QUpCZ05WQkFZVEFsVlRNUXN3Q1FZRFZRUUlEQUpEUVRFV01CUUdBMVVFQnd3TlUyRnVJRVp5WVc1amFYTmpiekViTUJrR0ExVUVDZ3dTUjNKaGJtUWdVbTkxYm1SekxDQkpibU11TVNFd0h3WURWUVFEREJoaGRYUm9MblZoZEM1bmNtRnVaSEp2ZFc1a2N5NWpiMjB3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRQ1YxbjI0Njd6OExvclRRb0djd2wxVUs4OUdnNG1yLzRtN1NxMmErMVRlWDlkTmZYYndjc3ltM3RHcmFhSFRkZXhkck83c3ZJRkduemJ2QUNYZGZzNUg4VXVBam8yZFIvUnM0c1BXVkJ3NWprcU9tbVBmRXhERG40MGF1MUptYStZUVgyZFlGNmV2UnZ3Q1g4ekF1ZFJ2RmFMajNLNXVVYjVMRktia0MrMUdWdU4yK1dkbTRFRmI2MTVFbHhZRkdJMmhZdTZkYklHNk5YYnFCQVhqTTNiZkJOZG1DbDhZZTUweGh3STZiTXl3ZzhlWGd0RGdhbU0zbHdDQlkrRk9aZ3NrQ1YwT2JPUmNxWWJjZUIwbk0xaFVTNEo2bXZoQkc0ZmJpbnVZYUhrOVJYMkxvQlFyeVIwYzZ6eWhYV0FEL2o3eS9rb3B6S21lQjdiYTNrTEpiSHdIQWdNQkFBR2pVekJSTUIwR0ExVWREZ1FXQkJRWWdWa1NESGJxbUR3WDBnWEVzTDM1Z0F0blNUQWZCZ05WSFNNRUdEQVdnQlFZZ1ZrU0RIYnFtRHdYMGdYRXNMMzVnQXRuU1RBUEJnTlZIUk1CQWY4RUJUQURBUUgvTUEwR0NTcUdTSWIzRFFFQkN3VUFBNElCQVFBV0hyR1g4MWJxclNCeGRlNUdKS2cvZnMwWUpIN3dId21ZcjMvYmpab0s2VmRLdzdpQlJ2WFRHSDJUM2FLNU9iTTBrZFlYOXFFa1FFczhQSFJjaGVTbktFUWdYOW5paEJvUmJUYnF1ZUFOK0IrUnExKzlTYWc5Yyt5eWlUNUNZRW1TVUpjaXh4MVdVUGN4eWdWTU84VXcxZisvamgxa2M3SkhlRzFSUTRKM0FWaUR1M1ptenBFdlpRTEhXOExBZTFFa3c3MkZ4WDhlaXBlTkIrNUY4NlNrN0xBKzFScDNRQm9XdkpHVVQvMGx0REJ5MW5VdlFaWmQ2WVl2NnV2cGhYOEI2RlJNN2V2SDY1SjMxVVFha2RrbDJYQ1JLRi9kZnZ5UVE2akpiRWdGWDRZck1VdFI2NTdJR1Jxa0hFQ3hNQStqakRxSGRLL1dnb1gzeVQzOUZpb2g8L1g1MDlDZXJ0aWZpY2F0ZT48L1g1MDlEYXRhPjwvS2V5SW5mbz48L1NpZ25hdHVyZT48c2FtbHA6U3RhdHVzPjxzYW1scDpTdGF0dXNDb2RlIFZhbHVlPSJ1cm46b2FzaXM6bmFtZXM6dGM6U0FNTDoyLjA6c3RhdHVzOlN1Y2Nlc3MiLz48L3NhbWxwOlN0YXR1cz48c2FtbDpBc3NlcnRpb24geG1sbnM6c2FtbD0idXJuOm9hc2lzOm5hbWVzOnRjOlNBTUw6Mi4wOmFzc2VydGlvbiIgVmVyc2lvbj0iMi4wIiBJRD0iX0FWOFFhSTk4czdSWUR4S1dOUmROWTRGTHRIc0pRam9FIiBJc3N1ZUluc3RhbnQ9IjIwMjItMTItMTVUMTU6MTE6NTAuODkwWiI%2BPHNhbWw6SXNzdWVyPnVybjphdXRoLnVhdC5ncmFuZHJvdW5kcy5jb208L3NhbWw6SXNzdWVyPjxzYW1sOlN1YmplY3Q%2BPHNhbWw6TmFtZUlEIEZvcm1hdD0idXJuOm9hc2lzOm5hbWVzOnRjOlNBTUw6MS4xOm5hbWVpZC1mb3JtYXQ6dW5zcGVjaWZpZWQiPmF1dGgwfDYzOGY1YTgyYzY1NjQxMzY1Nzg5ZTZkNTwvc2FtbDpOYW1lSUQ%2BPHNhbWw6U3ViamVjdENvbmZpcm1hdGlvbiBNZXRob2Q9InVybjpvYXNpczpuYW1lczp0YzpTQU1MOjIuMDpjbTpiZWFyZXIiPjxzYW1sOlN1YmplY3RDb25maXJtYXRpb25EYXRhIE5vdE9uT3JBZnRlcj0iMjAyMi0xMi0xNVQxNjoxMTo1MC44OTBaIiBSZWNpcGllbnQ9Imh0dHBzOi8vZXAtYXBpLnN0YWdlLm1vYmlsZS1nbHVjb21ldGVyLmNvbS9yZXNlbGxlci9xczQyTWQvc2FtbCIvPjwvc2FtbDpTdWJqZWN0Q29uZmlybWF0aW9uPjwvc2FtbDpTdWJqZWN0PjxzYW1sOkNvbmRpdGlvbnMgTm90QmVmb3JlPSIyMDIyLTEyLTE1VDE1OjExOjUwLjg5MFoiIE5vdE9uT3JBZnRlcj0iMjAyMi0xMi0xNVQxNjoxMTo1MC44OTBaIj48c2FtbDpBdWRpZW5jZVJlc3RyaWN0aW9uPjxzYW1sOkF1ZGllbmNlPmRhcmlvaGVhbHRoX3N0YWdlPC9zYW1sOkF1ZGllbmNlPjwvc2FtbDpBdWRpZW5jZVJlc3RyaWN0aW9uPjwvc2FtbDpDb25kaXRpb25zPjxzYW1sOkF1dGhuU3RhdGVtZW50IEF1dGhuSW5zdGFudD0iMjAyMi0xMi0xNVQxNToxMTo1MC44OTBaIiBTZXNzaW9uSW5kZXg9Il84aWdJdWdBSGF5RXVyT1BRNzRTQTVCQkR6UFVTdUl0bSI%2BPHNhbWw6QXV0aG5Db250ZXh0PjxzYW1sOkF1dGhuQ29udGV4dENsYXNzUmVmPnVybjpvYXNpczpuYW1lczp0YzpTQU1MOjIuMDphYzpjbGFzc2VzOnVuc3BlY2lmaWVkPC9zYW1sOkF1dGhuQ29udGV4dENsYXNzUmVmPjwvc2FtbDpBdXRobkNvbnRleHQ%2BPC9zYW1sOkF1dGhuU3RhdGVtZW50PjxzYW1sOkF0dHJpYnV0ZVN0YXRlbWVudCB4bWxuczp4cz0iaHR0cDovL3d3dy53My5vcmcvMjAwMS9YTUxTY2hlbWEiIHhtbG5zOnhzaT0iaHR0cDovL3d3dy53My5vcmcvMjAwMS9YTUxTY2hlbWEtaW5zdGFuY2UiPjxzYW1sOkF0dHJpYnV0ZSBOYW1lPSJmaXJzdF9uYW1lIiBOYW1lRm9ybWF0PSJ1cm46b2FzaXM6bmFtZXM6dGM6U0FNTDoyLjA6YXR0cm5hbWUtZm9ybWF0OmJhc2ljIj48c2FtbDpBdHRyaWJ1dGVWYWx1ZSB4c2k6dHlwZT0ieHM6c3RyaW5nIj5Ub208L3NhbWw6QXR0cmlidXRlVmFsdWU%2BPC9zYW1sOkF0dHJpYnV0ZT48c2FtbDpBdHRyaWJ1dGUgTmFtZT0ibGFzdF9uYW1lIiBOYW1lRm9ybWF0PSJ1cm46b2FzaXM6bmFtZXM6dGM6U0FNTDoyLjA6YXR0cm5hbWUtZm9ybWF0OmJhc2ljIj48c2FtbDpBdHRyaWJ1dGVWYWx1ZSB4c2k6dHlwZT0ieHM6c3RyaW5nIj5BbGxhbjwvc2FtbDpBdHRyaWJ1dGVWYWx1ZT48L3NhbWw6QXR0cmlidXRlPjxzYW1sOkF0dHJpYnV0ZSBOYW1lPSJlbXBsb3llZV9pZCIgTmFtZUZvcm1hdD0idXJuOm9hc2lzOm5hbWVzOnRjOlNBTUw6Mi4wOmF0dHJuYW1lLWZvcm1hdDpiYXNpYyI%2BPHNhbWw6QXR0cmlidXRlVmFsdWUgeHNpOnR5cGU9InhzOnN0cmluZyI%2BMTIzNDU2Nzg8L3NhbWw6QXR0cmlidXRlVmFsdWU%2BPC9zYW1sOkF0dHJpYnV0ZT48c2FtbDpBdHRyaWJ1dGUgTmFtZT0iZGFyaW9fY2hhbm5lbF9pZCIgTmFtZUZvcm1hdD0idXJuOm9hc2lzOm5hbWVzOnRjOlNBTUw6Mi4wOmF0dHJuYW1lLWZvcm1hdDpiYXNpYyI%2BPHNhbWw6QXR0cmlidXRlVmFsdWUgeHNpOnR5cGU9InhzOnN0cmluZyI%2BQTIzMTUyPC9zYW1sOkF0dHJpYnV0ZVZhbHVlPjwvc2FtbDpBdHRyaWJ1dGU%2BPC9zYW1sOkF0dHJpYnV0ZVN0YXRlbWVudD48L3NhbWw6QXNzZXJ0aW9uPjwvc2FtbHA6UmVzcG9uc2U%2B&RelayState=",
+        "isBase64Encoded": false
+    },
+    "context": {
+        "callbackWaitsForEmptyEventLoop": true,
+        "functionVersion": "$LATEST",
+        "functionName": "employers-elig-proc-samlRedirectAPIHandlerFunction-pzGmtiKUcD9p",
+        "memoryLimitInMB": "128",
+        "logGroupName": "/aws/lambda/employers-elig-proc-samlRedirectAPIHandlerFunction-pzGmtiKUcD9p",
+        "logStreamName": "2022/12/15/[$LATEST]0faa035fa16c44e0961b9ec27c142bc9",
+        "invokedFunctionArn": "arn:aws:lambda:us-east-1:139820419717:function:employers-elig-proc-samlRedirectAPIHandlerFunction-pzGmtiKUcD9p",
+        "awsRequestId": "f3745fca-c035-48b7-9acc-7359d3d463f0"
+    }
+}

@@ -1,0 +1,30 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+    <html xmlns="http://www.w3.org/1999/xhtml" lang="en-US">
+        <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+            <title>B2B Eligibility</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+            <style>
+            table, th, td {border: 0;border-collapse: collapse;mso-table-tspace: 0pt !important;mso-table-top: 0pt !important;}
+            th {background-color: #ffca99;}
+            th, td {padding: 5px;text-align: left;font-size: 14px;}
+            </style>
+        </head>
+        <body style="margin: 0; padding: 0;">
+            <table align="left" border="0" cellpadding="0" cellspacing="0" width="600" style="border-collapse: collapse;">
+                <tr><td><h2>Reconciliation Report {{reportDate}}</h2></td></tr>
+                <tr><td>
+                    <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%">
+                        {{#employers}}
+                        <tr><td colspan="2" style="background-color: black;height: 2px;padding: 0;"></td></tr>
+                        <tr><th>Employer:</th><th>{{employer}}</th></tr>
+                        <tr><th>Eligibility File:</th><td>{{file}}</td></tr>
+                        <tr><th>File Statistics:</th><td>Added: {{process.summary.added}} Removed: {{process.summary.removed}} Updated: {{process.summary.updated}}</td></tr>
+                        <tr><th>Braze Before:</th><td>eligible: {{last.eligible}} enrolled: {{last.enrolled}} ineligible: {{last.ineligible}}</td></tr>
+                        <tr><th>Braze After:</th><td>eligible: {{new.eligible}} enrolled: {{new.enrolled}} ineligible: {{new.ineligible}}</td></tr>
+                        {{/employers}}
+                    </table>
+                </td></tr>
+            </table>
+        </body>
+    </html>

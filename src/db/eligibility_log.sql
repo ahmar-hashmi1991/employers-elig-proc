@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS eligibility_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    activity_date TIMESTAMP,
+    eligibility_id INT,
+    action VARCHAR(64),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)  ENGINE=INNODB;

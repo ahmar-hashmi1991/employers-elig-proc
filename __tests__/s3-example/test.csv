@@ -1,0 +1,3 @@
+FirstName,LastName,Employee ID,Entity ID,Vitality ID,Gender,Date of Birth,Role,Branch,Reporting Attribute 1,Reporting Attribute 2,Reporting Attribute 3,Reporting Attribute 4,Reporting Attribute 5,Group Name,Release Consent,Member Outreach Consent,Phone Number,Email Address
+Johnny,Johnson,123456,,VS00123456,M,03/25/2020,EE,TEST,,,,,,ABC COMPANY,Y,Y,,test@noreply.com
+Roni,Weisgross,999999,,VS00123499,M,03/25/2020,EE,TEST,,,,,,ABC COMPANY,Y,Y,,ronw@noreply.com

@@ -1,0 +1,534 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  AppId:
+    Type: String
+  StageName:
+    Type: String
+    Default: stage
+    AllowedValues:
+      - dev
+      - stage
+      - prod
+    Description: Environment type - development (dev), staging (stage), production (prod)
+Conditions:
+  IsProd:
+    !Equals [!Ref StageName, "prod"]
+
+Mappings:
+  EnvironmentsMap:
+    stage:
+      Vpc: vpc-0dc99230247364f7d
+      SecurityGroup: sg-0ab8a6880c28a7e48 # employers-lambda-stage-sg
+      SubnetIds:
+        - subnet-02827805ebcfe4336 # dh-shops-stage-private1
+        - subnet-05724c0275b21e79f # dh-shops-stage-private2
+      JWTIssuer: https://dcp-dev.eu.auth0.com/
+      JWTAudience: dario-tools
+      JWKSURI: https://dcp-dev.eu.auth0.com/.well-known/jwks.json
+      APILoggingLevel: INFO
+      NotificationEmail: account-notifications@mydario.com
+      NotificationITEmail: sachindras@dariohealth.com # Need to change to ITSupport@dariohealth.com after testing on satging
+      NotificationSender: '"B2B Eligibility" <empl-elig-notifications@mydario.com>'
+      ShopUrl: 'https://staging.shop.mydario.com'
+      SIGNINGKEYFORSAMLSSO: 'a6197e2d5a9b8a1d51ae5c3a7a4e65d7be7432952bfb14626a1428d600fdd6cc'
+    prod:
+      Vpc: vpc-0cdb651f311675911
+      SecurityGroup: sg-0b8996e87f8f4c23e
+      SubnetIds:
+        - subnet-0c7c916020af48a64 # dh-shops-private1
+        - subnet-018cf5c8a1974664b # dh-shops-private2
+      JWTIssuer: https://dario-admin.us.auth0.com/
+      JWTAudience: dario-admin
+      JWKSURI: https://dario-admin.us.auth0.com/.well-known/jwks.json
+      APILoggingLevel: ERROR
+      NotificationEmail: Backoffice_Users@dariohealth.com
+      NotificationITEmail: ITSupport@dariohealth.com
+      NotificationSender: '"B2B Eligibility" <empl-elig-notifications@mydario.com>'
+      ShopUrl: 'https://shop.mydario.com'
+      SIGNINGKEYFORSAMLSSO: 'a6197e2d5a9b8a1d51ae5c3a7a4e65d7be7432952bfb14626a1428d600fdd6cc'
+
+
+Globals:
+  Function:
+    PermissionsBoundary: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/${AppId}-${AWS::Region}-PermissionsBoundary'
+    Runtime: nodejs14.x
+    Environment:
+      Variables:
+        STAGE: !Ref StageName
+        MYDARIO_SHOP_URL: !FindInMap [EnvironmentsMap, !Ref StageName, ShopUrl]
+    Tags:
+      Environment: !Sub ${StageName}
+    VpcConfig:
+      SecurityGroupIds:
+        - !FindInMap [EnvironmentsMap, !Ref StageName, SecurityGroup]
+      SubnetIds: !FindInMap [EnvironmentsMap, !Ref StageName, SubnetIds]
+
+Resources:
+  B2BAdminLambdaRole: #logical name of the resource
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com #allow lambda to assume that role
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: "AWSLambdaVPCAccessExecutionRole"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:DescribeInstances
+                  - ec2:AttachNetworkInterface
+                Resource: "*"
+        - PolicyName: "AWSLambdaSecretsAccessPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:CreateSecret
+                  - secretsmanager:UpdateSecret
+                  - secretsmanager:DeleteSecret
+                  - secretsmanager:TagResource
+                Resource: "arn:aws:secretsmanager:us-east-1:139820419717:secret:*"
+        - PolicyName: allowFileOperationsOnS3
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-admin-files-${StageName}
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-admin-files-${StageName}/*
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-employers-files-${StageName}
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-employers-files-${StageName}/*
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}/*
+        - PolicyName: "AWSLambdaSendEmailPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - ses:SendEmail
+                  - ses:SendTemplatedEmail
+                  - ses:SendRawEmail
+                  - ses:SendBulkTemplatedEmail
+                Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'apigateway.amazonaws.com'
+                - 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource:
+                  - !GetAtt AdminHandlerLambdaFunction.Arn
+                  - !GetAtt JWTAuthorizerLambdaFunction.Arn
+                  - !GetAtt EmployerFileUpload.Arn
+                  - !GetAtt EmployerFileDownload.Arn
+                  - !GetAtt EmployerFileRemove.Arn
+                  - !GetAtt SftpUserFolderCreation.Arn
+                  - !GetAtt EmpEligS3FolderCreation.Arn
+        - PolicyName: "allowSecrets"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:CreateSecret
+                  - secretsmanager:UpdateSecret
+                  - secretsmanager:DeleteSecret
+                  - secretsmanager:TagResource
+                Resource: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - PolicyName: allowS3FileOperations
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-admin-files-${StageName}
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-admin-files-${StageName}/*
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-employers-files-${StageName}
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-employers-files-${StageName}/*
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+                  - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}/*
+  # B2B Admin Handler
+  AdminHandlerLambdaFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/handlers/b2b-admin-handler.handleApiRequest
+      CodeUri: ./
+      Description: Lambda handler for API Gateway - Twilio integration
+      MemorySize: 256
+      Timeout: 60
+      Role: !GetAtt B2BAdminLambdaRole.Arn
+      Environment:
+        Variables:
+          EmployersBucket: !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+          MYDARIO_SHOP_URL: !FindInMap [EnvironmentsMap, !Ref StageName, ShopUrl]
+          SES_FROM_EMAIL: !FindInMap [EnvironmentsMap, !Ref StageName, NotificationSender]
+          SES_TO_EMAIL: !FindInMap [EnvironmentsMap, !Ref StageName, NotificationEmail]
+          SES_TO_IT_EMAIL: !FindInMap [EnvironmentsMap, !Ref StageName, NotificationITEmail]
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - AWSSecretsManagerCreateSecretPolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - AWSSecretsManagerUpdateSecretPolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - AWSSecretsManagerDeleteSecretPolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - AWSSecretsManagerTagResourcePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+
+  #API keys
+  B2BAdminAPIKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+      - ApiGatewayApiStage
+    Properties:
+      Name: !Sub b2b-admin-apikey-${StageName}
+      Description: !Sub ${AppId}-eligibility-b2b-admin-${StageName}-apiKey
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref ApiGatewayApi
+          StageName: !Sub ${StageName}
+  B2BAdminUsagePlanKey:
+    Type: 'AWS::ApiGateway::UsagePlanKey'
+    Properties:
+      KeyId: !Ref B2BAdminAPIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref B2BAdminUnlimitedUsagePlan
+  B2BAdminUnlimitedUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+      - B2BAdminAPIKey
+    Properties:
+      ApiStages:
+        - ApiId: !Ref ApiGatewayApi
+          Stage: !Sub ${StageName}
+      Description: Max of entire account limit per second (10000 requests per second).
+      UsagePlanName: !Sub ${AppId}-unlimited-usage-plan
+
+  AdminFilesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+
+  EmployersFilesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub aws-${AWS::Region}-employers-files-${StageName}
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+
+  # B2B Admin API
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub aws-b2b-admin-${StageName}-apis
+      OpenApiVersion: '2.0'
+      DefinitionBody:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location: ./swagger-admin.yml
+      MethodSettings:
+        - LoggingLevel: !FindInMap [EnvironmentsMap, !Ref StageName, APILoggingLevel]
+          ResourcePath: '/*'
+          HttpMethod: '*'
+          DataTraceEnabled: !If [IsProd, false, true]
+      StageName: !Sub ${StageName}
+      Variables:
+        STAGE: !Sub ${StageName}
+
+  # B2B Admin Authorizer lambda funvtion
+  JWTAuthorizerLambdaFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/handlers/admin/api-gw-jwt-authorizer.authorize
+      CodeUri: ./
+      Description: Lambda handler for API Gateway - JWT Authorizer
+      MemorySize: 256
+      Timeout: 60
+      Role: !GetAtt B2BAdminLambdaRole.Arn
+      Environment:
+        Variables:
+          TOKEN_ISSUER: !FindInMap [EnvironmentsMap, !Ref StageName, JWTIssuer]
+          AUDIENCE: !FindInMap [EnvironmentsMap, !Ref StageName, JWTAudience]
+          JWKS_URI: !FindInMap [EnvironmentsMap, !Ref StageName, JWKSURI]
+          SAMLSIGNINGKEY: !FindInMap [EnvironmentsMap, !Ref StageName, SIGNINGKEYFORSAMLSSO]
+
+    # B2B Admin Employer File Upload Function
+
+  EmployerFileUpload:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/employer_file_handler/b2b-employer-file-upload-handler.employerFileUploadOperationHandler
+      Description: A Lambda function that processes a employer file sent to  bucket.
+      MemorySize: 512
+      Timeout: 900
+      Role: !GetAtt B2BAdminLambdaRole.Arn
+      Environment:
+        Variables:
+          ArchiveBucket: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+      Policies:
+        # Give Read Permissions to the S3 Bucket
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteSql
+                - rds-db:connect
+              Resource: '*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectAcl
+              Resource:
+                - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-admin-files-${StageName}/*
+                - !Sub {BucketName: !Ref AdminFilesBucket }
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource:
+                Fn::Sub:
+                  - arn:aws:logs:${Region}:${AccountId}:log-group:/aws/lambda/*:*:*
+                  - { Region: !Ref AWS::Region, AccountId: !Ref AWS::AccountId }
+
+  EmployerFileDownload:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/employer_file_handler/b2b-employer-file-download-handler.employerFileDownloadHandler
+      Description: A Lambda function that get a employer file sent to  bucket.
+      MemorySize: 512
+      Timeout: 900
+      Role: !GetAtt B2BAdminLambdaRole.Arn
+      Environment:
+        Variables:
+          ArchiveBucket: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+      Policies:
+        # Give Read Permissions to the S3 Bucket
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectAcl
+                - s3:GetSignedUrl
+                - s3:GetSignedUrlPromise
+              Resource:
+                - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-admin-files-${StageName}/*
+                - !Sub { BucketName: !Ref AdminFilesBucket }
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource:
+                Fn::Sub:
+                  - arn:aws:logs:${Region}:${AccountId}:log-group:/aws/lambda/*:*:*
+                  - { Region: !Ref AWS::Region, AccountId: !Ref AWS::AccountId }
+
+  EmployerFileRemove:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/employer_file_handler/b2b-employer-file-remove-handler.employerFileRemoveHandler
+      Description: A Lambda function that processes a employer file sent to  bucket.
+      MemorySize: 512
+      Timeout: 900
+      Role: !GetAtt B2BAdminLambdaRole.Arn
+      Environment:
+        Variables:
+          ArchiveBucket: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+      Policies:
+        # Give Read Permissions to the S3 Bucket
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-admin-files-${StageName}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteSql
+                - rds-db:connect
+              Resource: '*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:DeleteObject
+                - s3:DeleteObjectAcl
+              Resource:
+                - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-admin-files-${StageName}/*
+                - !Sub { BucketName: !Ref AdminFilesBucket }
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource:
+                Fn::Sub:
+                  - arn:aws:logs:${Region}:${AccountId}:log-group:/aws/lambda/*:*:*
+                  - { Region: !Ref AWS::Region, AccountId: !Ref AWS::AccountId }
+
+  # S3 Bucket folder creation for AWS Secret (SFTP user)
+  SftpUserFolderCreation:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/b2b-admin-sftp-folder-handler.sftpEmployerFolderHandler
+      Description: A Lambda function that creates required folder structure for SFTP user in S3 bucket.
+      MemorySize: 512
+      Timeout: 900
+      Role: !GetAtt B2BAdminLambdaRole.Arn
+      Environment:
+        Variables:
+          ArchiveBucket: !Sub aws-${AWS::Region}-employers-files-${StageName}
+      Policies:
+        # Give Permissions to the S3 Bucket
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-employers-files-${StageName}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:*
+              Resource:
+                - !Sub aws-${AWS::Region}-employers-files-${StageName}
+                - !Sub aws-${AWS::Region}-employers-files-${StageName}/*
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource:
+                Fn::Sub:
+                  - arn:aws:logs:${Region}:${AccountId}:log-group:/aws/lambda/*:*:*
+                  - { Region: !Ref AWS::Region, AccountId: !Ref AWS::AccountId }
+  EmpEligS3FolderCreation:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/emp-elig-file-upload-handler.empEligFileUploadHandler
+      Description: A Lambda function that creates required folder structure for Employer for eligibility file upload in S3 bucket.
+      MemorySize: 512
+      Timeout: 900
+      Role: !GetAtt B2BAdminLambdaRole.Arn
+      Environment:
+        Variables:
+          EmployersBucket: !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+      Policies:
+        # Give Permissions to the S3 Bucket
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:*
+              Resource:
+                - !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+                - !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}/*
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource:
+                Fn::Sub:
+                  - arn:aws:logs:${Region}:${AccountId}:log-group:/aws/lambda/*:*:*
+                  - { Region: !Ref AWS::Region, AccountId: !Ref AWS::AccountId }
+Outputs:
+  EligibilityAdminApiUrl:
+    Description: URL of your API endpoint
+    Value: !Join
+      - ''
+      - - https://
+        - !Ref ApiGatewayApi
+        - '.execute-api.'
+        - !Ref 'AWS::Region'
+        - '.amazonaws.com/'
+        - !Sub ${StageName}
+    Export:
+      Name: !Sub b2b-admin-${StageName}:ApiUrl

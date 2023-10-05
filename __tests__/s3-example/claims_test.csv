@@ -1,0 +1,5 @@
+Encounter Date,Physician,Patient First Name,Middle,Last,Suffix,MRN,Address,Addr 2,City,State,Zip,Sex,Birth Dt,Hm Phone,Day Phone,Alt Phone,Cell Phone,Email Addr,Payer Name,Fin Class
+23/02/2021,"Parikh MD, Naresh",nastya100,,Georgia01,,270620,34108 Harvest Ridge LN,,Alpharetta,GA,30022-8636 USA,F,20/06/1992,,9499425823,,,testqa+georgia01@mydario.com,AARP Secure Horizon Medicare Adv HMO,UHC
+14/09/2021,"Parikh MD, Naresh",nastya101,,Georgia02,,273659,207 Accord Lane,Brayson,Grayson,GA,30017 USA,F,20/07/1992,,,,,testqa+georgia02@mydario.com,AARP Secure Horizon Medicare Adv HMO,UHC
+14/09/2022,"Parikh MD, Naresh",nastya102,,Georgia03,,273660,208 Accord Lane,Brayson,Grayson,GA,30018 USA,F,20/07/1993,,,,,testqa+georgia03@mydario.com,AARP Secure Horizon Medicare Adv HMO,UHC
+14/09/2023,"Parikh MD, Naresh",nastya103,,Georgia04,,273661,209 Accord Lane,Brayson,Grayson,GA,30019 USA,F,20/07/1994,,,,,testqa+georgia04@mydario.com,AARP Secure Horizon Medicare Adv HMO,UHC

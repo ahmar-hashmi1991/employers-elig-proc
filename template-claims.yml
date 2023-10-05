@@ -1,0 +1,234 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  AppId:
+    Type: String
+  StageName:
+    Type: String
+    Default: stage
+    AllowedValues: 
+      - dev
+      - stage
+      - prod
+    Description: Environment type - development (dev), staging (stage), production (prod)
+
+Mappings: 
+  EnvironmentsMap: 
+    stage:
+      Vpc: vpc-0dc99230247364f7d
+      SecurityGroup:
+        - sg-0ab8a6880c28a7e48 # employers-lambda-stage-sg
+      SubnetIds:
+        - subnet-02827805ebcfe4336 # dh-shops-stage-private1
+        - subnet-05724c0275b21e79f # dh-shops-stage-private2
+      DatabaseSG: sg-004f63feb361ec7c0
+      DefaultSG: sg-0bd70f404601ee3af
+    prod:
+      Vpc: vpc-0cdb651f311675911
+      SecurityGroup:
+        - sg-0b8996e87f8f4c23e
+      SubnetIds:
+        - subnet-0c7c916020af48a64 # dh-shops-private1
+        - subnet-018cf5c8a1974664b # dh-shops-private2
+      DatabaseSG: sg-033232837ac272d8c
+      DefaultSG: sg-0091ce4855b571040
+
+Globals:
+  Function:
+    # PermissionsBoundary: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/${AppId}-${AWS::Region}-PermissionsBoundary'
+    Runtime: nodejs14.x
+    Environment:
+        Variables:
+          STAGE: !Ref StageName
+    Tags:
+        Environment: !Sub ${StageName}
+    VpcConfig:
+        SecurityGroupIds: !FindInMap [EnvironmentsMap, !Ref StageName, SecurityGroup]
+        SubnetIds: !FindInMap [EnvironmentsMap, !Ref StageName, SubnetIds]
+
+Resources:
+  # B2B Admin Handler
+  ClaimsFileHandlerLambdaFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/handlers/claims/b2b-claims-file-handler.handleClaimsFile
+      CodeUri: ./
+      Description: Lambda handler for claims file processing
+      MemorySize: 256
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - batch:SubmitJob
+            Resource:
+              - !Ref BatchProcessingJobDefinition
+              - !Ref BatchProcessingJobQueue
+      Environment:
+        Variables:
+          BATCH_JOB_QUEUE_NAME: !Ref BatchProcessingJobQueue
+          BATCH_JOB_DEFINITION: !Ref BatchProcessingJobDefinition
+      Events:
+        claimsbucketEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref claimsbucket
+            Events: s3:ObjectCreated:*
+  EventInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref ClaimsFileHandlerLambdaFunction
+      MaximumRetryAttempts: 0
+      Qualifier: $LATEST
+  
+  claimsbucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-claimsbucket-${StageName}
+
+  # Batch framework
+  BatchServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: batch.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole
+  BatchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EC2 Security Group for instances launched in the VPC by Batch
+      VpcId: !FindInMap [EnvironmentsMap, !Ref StageName, Vpc]
+      SecurityGroupEgress: 
+        - 
+          CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+        - 
+          IpProtocol: "tcp"
+          FromPort: 3306
+          ToPort: 3306
+          DestinationSecurityGroupId: !FindInMap [EnvironmentsMap, !Ref StageName, DatabaseSG]
+  BatchProcessingJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      Type: container
+      PropagateTags: true
+      JobDefinitionName: !Sub B2BClaimsBatchJobDefinition-${StageName}
+      ContainerProperties:
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/b2b-claims-job-${StageName}:latest
+        FargatePlatformConfiguration:
+          PlatformVersion: LATEST
+        ResourceRequirements:
+          - Value: '0.25'
+            Type: VCPU
+          - Value: '512'
+            Type: MEMORY
+        JobRoleArn:  !GetAtt 'BatchTaskExecutionRole.Arn'
+        ExecutionRoleArn:  !GetAtt 'BatchTaskExecutionRole.Arn'
+        LogConfiguration:
+          LogDriver:  awslogs
+          Options:
+            awslogs-group: !Ref 'BatchLogGroup'
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: !Sub b2b-claims-job-${StageName}-logs
+        Command: ["node", "src/jobs/claims"]
+      PlatformCapabilities:
+      - FARGATE
+      Tags:
+        Service: Batch
+        Name: JobDefinitionTag
+        Expected: MergeTag
+
+  BatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Sub b2b-claims-job-${StageName}-awslogs
+      RetentionInDays: 7
+  BatchTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub b2b-claims-job-${StageName}-taskexec-role
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                - 'ecr:GetAuthorizationToken'
+                - 'ecr:BatchCheckLayerAvailability'
+                - 'ecr:GetDownloadUrlForLayer'
+                - 'ecr:BatchGetImage'
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+              Resource: '*'
+        - PolicyName: allowReadSecrets
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+              - secretsmanager:GetSecretValue
+              Resource: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - PolicyName: !Sub b2b-claims-job-${StageName}-ecs-task-s3-get-policy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+                - s3:ListBucket
+              Resource:
+                - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-claimsbucket-${StageName}
+                - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-claimsbucket-${StageName}/*
+  BatchProcessingJobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      JobQueueName: !Sub "b2b-claims-job-${StageName}-queue"
+      State: ENABLED
+      Priority: 1
+      ComputeEnvironmentOrder:
+      - Order: 1
+        ComputeEnvironment: !Ref ComputeEnvironment
+  ComputeEnvironment:
+    Type: AWS::Batch::ComputeEnvironment
+    Properties:
+      ComputeEnvironmentName: !Sub b2b-claims-job-compute-env-${StageName}
+      Type: MANAGED
+      State: ENABLED
+      ComputeResources:
+        Type: FARGATE
+        MaxvCpus: 40
+        Subnets: !FindInMap [EnvironmentsMap, !Ref StageName, SubnetIds]
+        SecurityGroupIds:
+        - !Ref BatchSecurityGroup
+      ServiceRole: !GetAtt BatchServiceRole.Arn
+
+  EligDBBatchSecurityGroupIngress:
+   Type: 'AWS::EC2::SecurityGroupIngress'
+   Properties:
+      GroupId: !FindInMap [EnvironmentsMap, !Ref StageName, DatabaseSG]
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !GetAtt BatchSecurityGroup.GroupId
+  EligDefaultSecurityGroupIngress:
+   Type: 'AWS::EC2::SecurityGroupIngress'
+   Properties:
+      GroupId: !FindInMap [EnvironmentsMap, !Ref StageName, DefaultSG]
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !GetAtt BatchSecurityGroup.GroupId

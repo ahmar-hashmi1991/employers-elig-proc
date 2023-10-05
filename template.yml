@@ -1,0 +1,3482 @@
+# This is the SAM template that represents the architecture of your serverless application
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
+
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Employers eligibility file processing application
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  AppId:
+    Type: String
+  StageName:
+    Type: String
+    Default: stage
+    AllowedValues:
+      - dev
+      - stage
+      - prod
+      - loadtesting
+    Description: Environment type - development (dev), staging (stage), production (prod)
+
+Mappings:
+  EnvironmentsMap:
+    stage:
+      Vpc: vpc-0dc99230247364f7d
+      SecurityGroup: sg-0ab8a6880c28a7e48 # employers-lambda-stage-sg
+      SubnetIds:
+        - subnet-02827805ebcfe4336 # dh-shops-stage-private1
+        - subnet-05724c0275b21e79f # dh-shops-stage-private2
+      PublicSubnetIds:
+        - subnet-083e11e94aa0828c9 # dh-shops-stage-public1
+        - subnet-0041739c0b3e92eb6 # dh-shops-stage-public2
+      SftpHostname: ftpef-stage.dariohealth.com
+      ApiLogLevel: INFO
+      RedisCacheNodeType: cache.t2.micro
+      RedisNumCacheNodes: 1
+      NotificationEmail: dev.err@mydario.com
+      NotificationSender: '"B2B Eligibility" <empl-elig-notifications@mydario.com>'
+      EligiblityLandingPageHost: https://stage-be.dariohealth.com
+      TerminationSchedule: cron(/3 * * * ? *) # every 3 minutes: cron(0/3 * * * ? *)
+      WeeklySchedule: cron(*/15 * * * ? *)
+      DailySchedule: cron(*/15 * * * ? *)
+      ShopUrl: 'https://staging.shop.mydario.com'
+      AllowedAccountsForIMAT: '[10044,22223]'
+    prod:
+      Vpc: vpc-0cdb651f311675911
+      SecurityGroup: sg-0b8996e87f8f4c23e
+      SubnetIds:
+        - subnet-0c7c916020af48a64 # dh-shops-private1
+        - subnet-018cf5c8a1974664b # dh-shops-private2
+      PublicSubnetIds:
+        - subnet-01a6ee9da58c4ad25 # dh-shops-public1
+        - subnet-0f8b005608fff6910 # dh-shops-public2
+      SftpHostname: ftpef.dariohealth.com
+      ApiLogLevel: ERROR
+      RedisCacheNodeType: cache.t3.medium
+      RedisNumCacheNodes: 1
+      NotificationEmail: b2b-notifications@mydario.com
+      NotificationSender: '"B2B Eligibility" <empl-elig-notifications@mydario.com>'
+      EligiblityLandingPageHost: https://be.dariohealth.com
+      TerminationSchedule: cron(0 8 * * ? *)
+      WeeklySchedule: cron(0 0 ? * SUN *)
+      DailySchedule: cron(0 0 * * ? *)
+      ShopUrl: 'https://shop.mydario.com'
+      AllowedAccountsForIMAT: '[22223,10533]'
+    loadtesting:
+      Vpc: vpc-0e91ee9fc6ef617a8
+      SecurityGroup: sg-00d4405728df49d07
+      SubnetIds:
+        - subnet-0c239e919b3f2e879
+        - subnet-0d53418773d915787
+        - subnet-0838b9336c4c18d56
+      PublicSubnetIds:
+        - subnet-043b0a9f7f4014a29
+        - subnet-06ba028fe56efad3b
+        - subnet-024f13a51de4d9ffe
+      SftpHostname: ftpef-loadtesting.dariohealth.com
+      ApiLogLevel: ERROR
+      RedisCacheNodeType: cache.t3.medium
+      RedisNumCacheNodes: 1
+      NotificationEmail: dev.err@mydario.com
+      NotificationSender: '"B2B Eligibility Load Testing" <empl-elig-notifications@mydario.com>'
+      EligiblityLandingPageHost: https://dev-be.dariohealth.com
+      TerminationSchedule: cron(0 8 * * ? *)
+      WeeklySchedule: cron(0 0 ? * SUN *)
+      DailySchedule: cron(0 0 * * ? *)
+
+# Shared configuration for all resources, more in
+# https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    # The PermissionsBoundary allows users to safely develop with their function's permissions constrained
+    # to their current application. All the functions and roles in this application have to include it and
+    # it has to be manually updated when you add resources to your application.
+    # More information in https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html
+    PermissionsBoundary: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/${AppId}-${AWS::Region}-PermissionsBoundary'
+    Runtime: nodejs18.x
+    Environment:
+        Variables:
+          STAGE: !Ref StageName
+          SQS_QUEUE_URL: !Ref EligibilityWorkerQueue
+          SQS_EXTERNAL_QUEUE_URL: !Ref ExternalServicesQueue
+          SQS_FLOW_QUEUE_URL: !Ref EligibilityFlowQueue
+          SQS_SOLERA_DISENROLLMENT_QUEUE: !Ref SoleraDisenrollmentQueue
+          SMS_TOPIC_ARN: !Ref SNSEligibilityAlarmTopic
+          SES_FROM_EMAIL: !FindInMap [EnvironmentsMap, !Ref StageName, NotificationSender]
+          SES_TO_EMAIL: !FindInMap [EnvironmentsMap, !Ref StageName, NotificationEmail]
+          EligiblityLandingPageHost: !FindInMap [EnvironmentsMap, !Ref StageName, EligiblityLandingPageHost]
+          CreatePendingOrderStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:CreatePendingEligibilityOrder-${StageName}
+    Tags:
+        Environment: !Sub ${StageName}
+    VpcConfig:
+        SecurityGroupIds:
+          - !FindInMap [EnvironmentsMap, !Ref StageName, SecurityGroup]
+        SubnetIds: !FindInMap [EnvironmentsMap, !Ref StageName, SubnetIds]
+
+# Resources declares the AWS resources that you want to include in the stack
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+Resources:
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is a Lambda function config associated with the source code: s3-csv-handler.js
+  s3EmployerFileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/s3-csv-handler.s3EmployerFileHandler
+      Description: A Lambda function that processes a csv file sent to S3 bucket.
+      MemorySize: 3072
+      Timeout: 900
+      Environment:
+        Variables:
+          ArchiveBucket: !Sub aws-${AWS::Region}-dario-${AppId}-employerarchive-${StageName}
+      Policies:
+        # Give Read Permissions to the S3 Bucket
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-employerarchive-${StageName}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteSql
+                - rds-db:connect
+              Resource: '*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt EligibilityWorkerQueue.Arn
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref SNSEligibilityAlarmTopic
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt ExternalServicesQueue.Arn
+      Events:
+        employersbucketEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref employersbucket
+            Events: s3:ObjectCreated:*
+    DependsOn:
+      - LambdaExecutionRole
+  EventInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref s3EmployerFileFunction
+      MaximumRetryAttempts: 0
+      Qualifier: $LATEST
+
+  sqsEligibilityWorkerHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/sqs-eligibility-payload-handler.sqsPayloadHandler
+      Description: A Lambda function that handles the payload of eligibility transactions from associated SQS queue.
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: 3072
+      Timeout: 55 # Chosen to be less than the default SQS Visibility Timeout of 30 seconds
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+          CreatePendingOrderStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:CreatePendingEligibilityOrder-${StageName}
+          MYDARIO_SHOP_URL: !FindInMap [EnvironmentsMap, !Ref StageName, ShopUrl]
+      Events:
+        SimpleQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt EligibilityWorkerQueue.Arn
+            BatchSize: 10
+        QueueEventForExternalServices:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ExternalServicesQueue.Arn
+            BatchSize: 10
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteSql
+                - rds-db:connect
+              Resource: '*'
+          
+  EligibilityWorkerQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      VisibilityTimeout: 60
+      Tags:
+        - Key: Environment
+          Value: !Sub ${StageName}
+  ExternalServicesQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      VisibilityTimeout: 60
+      Tags:
+        - Key: Environment
+          Value: !Sub ${StageName}
+
+  sqsEligibilityFlowHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/sqs-eligibility-payload-handler.sqsFlowPayloadHandler
+      Description: A Lambda function that handles the payload of eligibility flow event.
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: 128
+      Timeout: 55 # Chosen to be less than the default SQS Visibility Timeout of 30 seconds
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+      Events:
+        SimpleQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt EligibilityFlowQueue.Arn
+            BatchSize: 10
+
+  EligibilityFlowQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      VisibilityTimeout: 60
+      Tags:
+        - Key: Environment
+          Value: !Sub ${StageName}
+
+  LambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Principal:
+            Service:
+            - "lambda.amazonaws.com"
+          Action:
+          - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+      - PolicyName: "AWSLambdaVPCAccessExecutionRole"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: "Allow"
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - ec2:CreateNetworkInterface
+            - ec2:DescribeNetworkInterfaces
+            - ec2:DeleteNetworkInterface
+            - ec2:DescribeInstances
+            - ec2:AttachNetworkInterface
+            Resource: "*"
+      - PolicyName: "allowSecrets"
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - secretsmanager:GetSecretValue
+            Resource: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+      - PolicyName: allowSqs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+            - sqs:ChangeMessageVisibility
+            Resource: !GetAtt EligibilityWorkerQueue.Arn
+      - PolicyName: allowFlowSqs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+            - sqs:ChangeMessageVisibility
+            Resource: !GetAtt EligibilityFlowQueue.Arn
+      - PolicyName: allowSns
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sns:Publish
+            Resource: !Ref SNSEligibilityAlarmTopic
+      - PolicyName: allowSimpleEmailService
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ses:SendEmail
+            - ses:SendTemplatedEmail
+            - ses:SendRawEmail
+            - ses:SendBulkTemplatedEmail
+            Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+      - PolicyName: allowS3UploadErrorFile
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource:
+              - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+              - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}/*
+      - PolicyName: allowS3UploadAndGetFile
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:PutObject
+            Resource:
+              - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-eidgeneration-${StageName}
+              - !Sub arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-eidgeneration-${StageName}/*
+
+      - PolicyName: allowExternalSrvSqs
+        PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+              - sqs:SendMessage
+              - sqs:SendMessageBatch
+              - sqs:ListQueues
+              - sqs:GetQueueUrl
+              Resource: !GetAtt ExternalServicesQueue.Arn
+      - PolicyName: allowSoleraSqs
+        PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+              - sqs:SendMessage
+              - sqs:SendMessageBatch
+              - sqs:ListQueues
+              - sqs:GetQueueUrl
+              Resource: !GetAtt SoleraDisenrollmentQueue.Arn
+      - PolicyName: LambdaToStepFunctionInvokePolicy
+        PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+               - states:StartExecution
+              Resource: arn:aws:states:*:*:stateMachine:* 
+  StepFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: !Sub 'states.${AWS::Region}.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: lambda
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 'lambda:InvokeFunction'
+            Resource:
+            - !GetAtt APIHandlerAssignToClinicFunction.Arn
+            - !GetAtt ProvisionToWayforwardFunction.Arn
+            - !GetAtt ProvisionToMSKFunction.Arn
+            - !GetAtt CreateEligibilityOrderFunction.Arn
+            - !GetAtt SubscribeToBrazeSubGroupFunction.Arn
+            - !GetAtt CreateDarioUserFunction.Arn
+            - !GetAtt CreateDarioUserForMinorFunction.Arn
+            - !GetAtt DarioUserMembershipFunction.Arn
+            - !GetAtt CreatePendingEligibilityOrderFunction.Arn
+            - !GetAtt UpdateEligibilityV2Function.Arn
+            - !GetAtt UpdateBackEndOverridesFunction.Arn
+            - !GetAtt CreateOrderEventsFunction.Arn
+            - !GetAtt ActivateEligibilityOrderFunction.Arn
+            - !GetAtt ExternalServicesFunction.Arn
+            - !GetAtt UpdateEidsForExistingUsersOnShopFunction.Arn
+            - !GetAtt CreateEligibilityForB2CFunction.Arn
+            - !GetAtt DeleteEligibilityForB2CFunction.Arn
+            - !GetAtt GetEligibilityForB2CFunction.Arn
+            - !GetAtt UpdateEligibilityForB2CFunction.Arn
+            - !GetAtt CreateEnrollmentFunction.Arn
+
+  employersbucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+
+  eidgeneration:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-eidgeneration-${StageName}
+
+  employerarchive:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-employerarchive-${StageName}
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+
+  EmployerEligibilityErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      Metrics:
+      - Expression: "m1+m2+m3"
+        Id: "e1"
+        Label: EligibilityLambdaErrors1
+        ReturnData: true
+      - Id: "m1"
+        Label: "S3FileProcessorErrors"
+        MetricStat:
+          Metric:
+            Dimensions:
+            - Name: FunctionName
+              Value: !Ref s3EmployerFileFunction
+            MetricName: Errors
+            Namespace: "AWS/Lambda"
+          Period: 60
+          Stat: Sum
+          Unit: Count
+        ReturnData: false
+      - Id: "m2"
+        Label: "SQSWorkerErrors"
+        MetricStat:
+          Metric:
+            Dimensions:
+            - Name: FunctionName
+              Value: !Ref sqsEligibilityWorkerHandlerFunction
+            MetricName: Errors
+            Namespace: "AWS/Lambda"
+          Period: 60
+          Stat: Sum
+          Unit: Count
+        ReturnData: false
+      - Id: "m3"
+        Label: "APIHandlerErrors"
+        MetricStat:
+          Metric:
+            Dimensions:
+            - Name: FunctionName
+              Value: !Ref apiHandlerFunction
+            MetricName: Errors
+            Namespace: "AWS/Lambda"
+          Period: 60
+          Stat: Sum
+          Unit: Count
+        ReturnData: false
+      - Id: "m4"
+        Label: "FlowAPIHandlerErrors"
+        MetricStat:
+          Metric:
+            Dimensions:
+            - Name: FunctionName
+              Value: !Ref eligibilityFlowAPIHandlerFunction
+            MetricName: Errors
+            Namespace: "AWS/Lambda"
+          Period: 60
+          Stat: Sum
+          Unit: Count
+        ReturnData: false
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - !Ref SNSEligibilityAlarmTopic
+
+  B2BStateMachineErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+        Metrics:
+        - Expression: "s1+s2+s3"
+          Id: "smerrors"
+          Label: B2BStateMachineErrors
+          ReturnData: true
+        - Id: "s1"
+          Label: "EligAssignToClinicErrors"
+          MetricStat:
+            Metric:
+              Dimensions:
+              - Name: StateMachineArn
+                Value: !Ref EligAssignToClinicStateMachine
+              MetricName: ExecutionsFailed
+              Namespace: "AWS/States"
+            Period: 60
+            Stat: Sum
+            Unit: Count
+          ReturnData: false
+        - Id: "s2"
+          Label: "EligCreateOrderErrors"
+          MetricStat:
+            Metric:
+              Dimensions:
+              - Name: StateMachineArn
+                Value: !Ref EligCreateOrderStateMachine
+              MetricName: ExecutionsFailed
+              Namespace: "AWS/States"
+            Period: 60
+            Stat: Sum
+            Unit: Count
+          ReturnData: false
+        - Id: "s3"
+          Label: "EligPostEnrollmentErrors"
+          MetricStat:
+            Metric:
+              Dimensions:
+              - Name: StateMachineArn
+                Value: !Ref EligPostEnrollmentStateMachine
+              MetricName: ExecutionsFailed
+              Namespace: "AWS/States"
+            Period: 60
+            Stat: Sum
+            Unit: Count
+          ReturnData: false
+        - Id: "s4"
+          Label: "EligCreatePendingOrderErrors"
+          MetricStat:
+            Metric:
+              Dimensions:
+              - Name: StateMachineArn
+                Value: !Ref CreatePendingEligOrderStateMachine
+              MetricName: ExecutionsFailed
+              Namespace: "AWS/States"
+            Period: 60
+            Stat: Sum
+            Unit: Count
+          ReturnData: false
+        EvaluationPeriods: 1
+        Threshold: 1
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+        - Ref: SNSEligibilityAlarmTopic
+
+  # SNS topic to send emails to users (used inside Lambda function)
+  SNSEligibilityAlarmTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      Subscription:
+        - Endpoint: !FindInMap [EnvironmentsMap, !Ref StageName, NotificationEmail]
+          Protocol: "email"
+  # SFTP resources
+  SftpAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub aws-${AWS::Region}-${AWS::AccountId}-${AppId}-sftpAccessPolicy-${StageName}
+      Description: Eligibility Sftp access policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - execute-api:Invoke
+            Resource: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/v1/GET/*'
+          -
+            Effect: Allow
+            Action:
+              - apigateway:GET
+            Resource: "*"
+
+  SftpAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'transfer.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - !Ref SftpAccessPolicy
+      Tags:
+        - Key: Environment
+          Value: !Sub ${StageName}
+
+  SftpEligibilityUserAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'transfer.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+      - PolicyName: SftpUserAceessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - 's3:*'
+            Resource: !Sub 'arn:aws:s3:::aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}*'
+      Tags:
+        - Key: Environment
+          Value: !Sub ${StageName}
+
+  SftpCloudWatchLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - transfer.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: TransferLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  SftpEligibilityEip1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - ''
+          - - !Sub EIP ${AppId} sftp1
+            - !FindInMap [EnvironmentsMap, !Ref StageName, Vpc]
+      - Key: AppID
+        Value: !Ref AppId
+  SftpEligibilityEip2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - ''
+          - - !Sub EIP ${AppId} sftp2
+            - !FindInMap [EnvironmentsMap, !Ref StageName, Vpc]
+      - Key: AppID
+        Value: !Ref AppId
+
+  SftpEligibilitySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !FindInMap [EnvironmentsMap, !Ref StageName, Vpc]
+      GroupDescription: Enable SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: !Sub 'VpcSecurityGroup SFTP ${AppId}'
+      - Key: AppID
+        Value: !Ref AppId
+
+  SftpServer:
+    Type: AWS::Transfer::Server
+    Properties:
+      EndpointType: VPC
+      EndpointDetails:
+        VpcId: !FindInMap [EnvironmentsMap, !Ref StageName, Vpc]
+        SubnetIds: !FindInMap [EnvironmentsMap, !Ref StageName, PublicSubnetIds]
+        SecurityGroupIds:
+        - !Ref SftpEligibilitySecurityGroup
+        AddressAllocationIds:
+        - !GetAtt SftpEligibilityEip1.AllocationId
+        - !GetAtt SftpEligibilityEip2.AllocationId
+      IdentityProviderDetails:
+        InvocationRole:
+          Fn::GetAtt: SftpAccessRole.Arn
+        Url:
+          Fn::Join:
+            - ''
+            - - https://
+              - Ref: ApiGatewayRestApi
+              - .execute-api.
+              - Ref: AWS::Region
+              - .amazonaws.com/
+              - Ref: ApiGatewayStage
+      IdentityProviderType: API_GATEWAY
+      LoggingRole:
+        Fn::GetAtt: SftpCloudWatchLoggingRole.Arn
+      Tags:
+        - Key: Environment
+          Value: !Sub ${StageName}
+        - Key: aws:transfer:customHostname
+          Value: !FindInMap [EnvironmentsMap, !Ref StageName, SftpHostname]
+
+  sftpUserPasswordAuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/sftp-auth-handler.authenticate
+      Description: A Lambda function that authenticates SFTP user.
+      MemorySize: 128
+      Timeout: 300
+      Environment:
+        Variables:
+          ROLE_ARN: !GetAtt SftpEligibilityUserAccessRole.Arn
+          BUCKET_NAME: !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+
+  # SftpUser:
+  #   Type: AWS::Transfer::User
+  #   Properties:
+  #     UserName: testuser
+  #     HomeDirectory: !Sub '/aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}/test'
+  #     Role: !GetAtt SftpAccessRole.Arn
+  #     ServerId: !GetAtt SftpServer.ServerId
+  #     SshPublicKeys:
+  #       - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDPMyAs5tQ6v5WWbUWfi+JXTu0gilFZ6cblNrRocFzRKLuo/W9jA2KUGirK/EFsxF3QEEgfI8xML6c/9Vd97xYWugSMfOEuSlVz1JOCfv9AuYNvoOplxFbPAJF9Bi48aTK8pXhUjGpv9cifJlLO1ZnLyYE17mmsLATRlCCLUgmHyGEe/BK/dwmv2wNzhYq76lApujAmV2Obs67VeZErq3Ent4RZ+SWxRS3b/BqWKw4tc8E72gTyBD3ZoXYIxL9H8VhrUabn+zC8S6C+Mh4sWhnz4UGLKlzqyhpK4L7obhq0GPNUuqMN8QtpwbKiTHIjTEbDW1hC/ZzHQCcq3k+0ZsgJ ubuntu@LS-C078
+  # FTP sync process
+  EmployersFTPSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/employers-ftp-handler.employersFTPFileHandler
+      Description: A Lambda function that syncs employers files from external FTP servers.
+      MemorySize: 128
+      Timeout: 120
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Principal:
+            Service:
+            - "lambda.amazonaws.com"
+          Action:
+          - "sts:AssumeRole"
+      Policies:
+        # Give Read/Write Permissions to the S3 Bucket
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+    DependsOn:
+      - LambdaExecutionRole
+  FTPSyncCronEvent: #logical name of the resource
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: cron(0 0/6 ? * * *) #when the event should trigger once per hour - (0 0/1 * * ? *)
+      Targets:
+        -
+          Arn: !GetAtt EmployersFTPSyncFunction.Arn #reference the lambda function by its arn
+          Id: 'EmployersFTPSyncFunction' #unique name of the target
+          Input: !Sub "{\"bucket\":\"aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}\"}"
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt EmployersFTPSyncFunction.Arn
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt FTPSyncCronEvent.Arn
+  # API Gateway rssources
+  apiHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-handler.handleAPIRequest
+      Description: A Lambda function that processes requests from the API.
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          EligAssignToClinicStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:EligAssignToClinic-${StageName}
+          EligibilityPostEnrollmentStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:EligibilityPostEnrollment-${StageName}
+          CreatePendingOrderStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:CreatePendingEligibilityOrder-${StageName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Principal:
+            Service:
+            - "lambda.amazonaws.com"
+            - "states.amazonaws.com"
+          Action:
+          - "sts:AssumeRole"
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteSql
+                - rds-db:connect
+              Resource: '*'
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:*
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt EligibilityWorkerQueue.Arn
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !GetAtt EligPostEnrollmentStateMachine.Arn
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt ExternalServicesQueue.Arn
+    DependsOn:
+      - LambdaExecutionRole
+  APIHandlerAssignToClinicFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-handler.AssignUserToClinic
+      Description: A Lambda function that assigns a user to clinic.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+    DependsOn:
+      - LambdaExecutionRole
+  ProvisionToWayforwardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/provisioning-handler.ProvisionToWayforweard
+      Description: A Lambda function that provisiones user to wayforward.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+    DependsOn:
+      - LambdaExecutionRole
+  ProvisionToMSKFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/provisioning-handler.ProvisionToMSK
+      Description: A Lambda function that provisiones user to MSK.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+    DependsOn:
+      - LambdaExecutionRole
+  CreateDarioUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/dario-user-handler.CreateDarioUser
+      Description: A Lambda function for creating dario user.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole
+  CreateDarioUserForMinorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/dario-user-handler.CreateDarioUserForMinor
+      Description: A Lambda function for creating minor user and parent-if not exists.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole
+  DarioUserMembershipFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/dario-user-handler.DarioUserMembership
+      Description: A Lambda function for override products, define information like plan, clinic.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+    DependsOn:
+      - LambdaExecutionRole
+  CreateEligibilityOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/step-function-order-handler.CreateEligibilityOrder
+      Description: A Lambda function that creates a new eligibility order.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole
+  CreatePendingEligibilityOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/step-function-order-handler.CreatePendingEligibilityOrder
+      Description: A Lambda function that creates a pending eligibility order.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole
+  UpdateEidsForExistingUsersOnShopFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs18.x
+      CodeUri: ./
+      Handler: src/handlers/step-function-order-handler.UpdateEidsForExistingUsersOnShop
+      Description: A Lambda function that updates eids for all the users on shop.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+               - states:StartExecution
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole  
+  CreateEligibilityForB2CFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs18.x
+      CodeUri: ./
+      Handler: src/handlers/s3-csv-handler.createEligibilityForB2C
+      Description: A Lambda function that creates eligibility for b2c.
+      MemorySize: 128
+      Timeout: 900
+      Environment:
+        Variables:
+          EligAssignToClinicStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:EligAssignToClinic-${StageName}
+          EligibilityPostEnrollmentStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:EligibilityPostEnrollment-${StageName}
+          CreatePendingOrderStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:CreatePendingEligibilityOrder-${StageName}
+          MYDARIO_SHOP_URL: !FindInMap [EnvironmentsMap, !Ref StageName, ShopUrl]
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+               - states:StartExecution
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt ExternalServicesQueue.Arn   
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:*      
+    DependsOn:
+      - LambdaExecutionRole  
+  DeleteEligibilityForB2CFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs18.x
+      CodeUri: ./
+      Handler: src/handlers/s3-csv-handler.deleteEligibilityForB2C
+      Description: A Lambda function that deletes eligibility for b2c.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+               - states:StartExecution
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt ExternalServicesQueue.Arn 
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:*             
+    DependsOn:
+      - LambdaExecutionRole 
+  GetEligibilityForB2CFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs18.x
+      CodeUri: ./
+      Handler: src/handlers/s3-csv-handler.getEligibilityForB2C
+      Description: A Lambda function that gets eligibility for b2c.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+               - states:StartExecution
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole  
+  CreateEnrollmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs18.x
+      CodeUri: ./
+      Handler: src/handlers/s3-csv-handler.createEnrollment
+      Description: A Lambda function that creates  enrollment for existing eligible user.
+      MemorySize: 128
+      Timeout: 900
+      Environment:
+        Variables:
+          EligAssignToClinicStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:EligAssignToClinic-${StageName}
+          EligibilityPostEnrollmentStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:EligibilityPostEnrollment-${StageName}
+          CreatePendingOrderStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:CreatePendingEligibilityOrder-${StageName}
+          MYDARIO_SHOP_URL: !FindInMap [EnvironmentsMap, !Ref StageName, ShopUrl]
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+               - states:StartExecution
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt ExternalServicesQueue.Arn   
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:*      
+    DependsOn:
+      - LambdaExecutionRole  
+  
+  UpdateEligibilityForB2CFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs18.x
+      CodeUri: ./
+      Handler: src/handlers/s3-csv-handler.updateEligibilityForB2C
+      Description: A Lambda function that updates eligibility for b2c.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+               - states:StartExecution
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt ExternalServicesQueue.Arn      
+    DependsOn:
+      - LambdaExecutionRole                
+  UpdateEligibilityV2Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-handler.updateEligibilityV2
+      Description: A Lambda function for updating eligibility data after creating order.
+      MemorySize: 128
+      Timeout: 900
+      Environment:
+        Variables:
+          EligAssignToClinicStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:EligAssignToClinic-${StageName}
+          EligibilityPostEnrollmentStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:EligibilityPostEnrollment-${StageName}
+          CreatePendingOrderStateMachineArn: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:CreatePendingEligibilityOrder-${StageName}
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:*
+
+    DependsOn:
+      - LambdaExecutionRole
+  UpdateBackEndOverridesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-handler.updateBackEndOverrides
+      Description: A Lambda function for updating BE data after creating order.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole
+  CreateOrderEventsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-handler.CreateOrderEvents
+      Description: A Lambda function for sending events after order creation.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole
+  ActivateEligibilityOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/step-function-order-handler.ActivateEligibilityOrder
+      Description: A Lambda function for order activation.
+      MemorySize: 128
+      Timeout: 900
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole
+  ExternalServicesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-handler.ExternalServicesStep
+      Description: A Lambda function for order activation.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt ExternalServicesQueue.Arn
+    DependsOn:
+      - LambdaExecutionRole
+  SubscribeToBrazeSubGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/step-function-eligibility-enrollment.SubscribeToBrazeSubscriptionGroup
+      Description: A Lambda function that executes post enrollment activities.
+      MemorySize: 128
+      Timeout: 900
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+    DependsOn:
+      - LambdaExecutionRole
+  eligibilityFlowAPIHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-flow-handler.handleAPIRequest
+      Description: A Lambda function that processes eligibility flow log resource API requests.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteSql
+                - rds-db:connect
+              Resource: '*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt EligibilityFlowQueue.Arn
+    DependsOn:
+      - LambdaExecutionRole
+  eligibilitySurveyAPIHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-survey-handler.handleAPIRequest
+      Description: A Lambda function that processes eligibility survey log resource API requests.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteSql
+                - rds-db:connect
+              Resource: '*'
+    DependsOn:
+      - LambdaExecutionRole
+  getEmployerRulesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-handler.getEmployerRules
+      Description: A Lambda function that returns eligibility rules for an employer.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+    DependsOn:
+      - LambdaExecutionRole
+
+  generateEidFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-handler.generateEid
+      Description: A Lambda function that returns eid from file for an employer.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        # Give Read Permissions to the S3 Bucket
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-eidgeneration-${StageName}
+
+      Events:
+        eidGenerationBucketEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref eidgeneration
+            Events: s3:ObjectCreated:*
+    DependsOn:
+      - LambdaExecutionRole
+  GenerateEidEventInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref generateEidFunction
+      MaximumRetryAttempts: 0
+      Qualifier: $LATEST
+      
+  samlRedirectAPIHandlerFunction:
+    Type: AWS::Serverless::Function
+    DependsOn:
+      - LambdaExecutionRole
+      - ApiGatewayRestApi
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-saml-redirect-handler.handleAPIRequest
+      Description: A Lambda function that processes saml request and redirects to dario form
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+  firewallAPIHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-firewall-handler.handleAPIRequest
+      Description: A Lambda function that processes requests from the API.
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+    DependsOn:
+      - LambdaExecutionRole
+  vitalityFlexAPIHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-vitality-flex-handler.handleAPIRequest
+      Description: A Lambda function that processes requests from the API.
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+                - sqs:SendMessageBatch
+                - sqs:ListQueues
+                - sqs:GetQueueUrl
+              Resource: !GetAtt EligibilityWorkerQueue.Arn
+    DependsOn:
+      - LambdaExecutionRole
+  handleAPISearchRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-search-handler.handleAPISearchRequest
+      Description: A Lambda function that processes search requests from the API.
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+          AllowedAccountsForIMAT: !FindInMap [EnvironmentsMap, !Ref StageName, AllowedAccountsForIMAT]
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+    DependsOn:
+      - LambdaExecutionRole
+  checkRpmAPIHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-rpm-handler.checkRpmUserAPIRequest
+      Description: A Lambda function for checking RPM users.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteSql
+                - rds-db:connect
+              Resource: '*'
+    DependsOn:
+      - LambdaExecutionRole
+  addPatientByMrnIDFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/api-gw-rpm-handler.addPatientByMrnID
+      Description: A Lambda function for adding new patient by RPM user.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteSql
+                - rds-db:connect
+              Resource: '*'
+    DependsOn:
+      - LambdaExecutionRole
+
+  VitalityFlexErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - !Ref SNSEligibilityAlarmTopic
+      AlarmDescription: "Alarm if lambda errors out too many times"
+      Namespace: "AWS/Lambda"
+      MetricName: "Errors"
+      Dimensions:
+      - Name: "FunctionName"
+        Value: !Ref vitalityFlexAPIHandlerFunction
+      Statistic: "Sum"
+      ComparisonOperator: "GreaterThanThreshold"
+      Threshold: 0
+      EvaluationPeriods: 1
+      Period: 60
+      TreatMissingData: "notBreaching"
+  VitalityFlexApplicationErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - !Ref SNSEligibilityAlarmTopic
+      AlarmDescription: "Alarm if application errors occur"
+      Namespace: "EligibilityFW"
+      MetricName: "VitalityFlexHandlerErrors"
+      Statistic: "Sum"
+      ComparisonOperator: "GreaterThanThreshold"
+      Threshold: 0
+      EvaluationPeriods: 1
+      Period: 60
+      TreatMissingData: "notBreaching"
+  VitalityFlexNewOrderAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - !Ref SNSEligibilityAlarmTopic
+      AlarmDescription: "Alarm when new order arrives"
+      Namespace: "EligibilityFW"
+      MetricName: "OrderNotificationRecieved"
+      Statistic: "Sum"
+      ComparisonOperator: "GreaterThanThreshold"
+      Threshold: 0
+      EvaluationPeriods: 1
+      Period: 60
+      TreatMissingData: "notBreaching"
+
+  # Step Functions
+  EligAssignToClinicStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub EligAssignToClinic-${StageName}
+      DefinitionUri: statemachine/AssignUserToClinic.asl.json
+      Role: !GetAtt StepFunctionRole.Arn
+      Tracing:
+        Enabled: True
+      DefinitionSubstitutions:
+        APIHandlerAssignToClinicFunctionArn: !GetAtt APIHandlerAssignToClinicFunction.Arn
+        ProvisionToWayforwardFunctionArn: !GetAtt ProvisionToWayforwardFunction.Arn
+        ProvisionToMSKFunctionArn: !GetAtt ProvisionToMSKFunction.Arn
+        CreateDarioUserFunctionArn: !GetAtt CreateDarioUserFunction.Arn
+        CreateDarioUserForMinorFunctionArn: !GetAtt CreateDarioUserForMinorFunction.Arn
+        DarioUserMembershipFunctionArn: !GetAtt DarioUserMembershipFunction.Arn
+      Tags:
+        Environment: !Sub ${StageName}
+  EligCreateOrderStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub CreateEligibilityOrder-${StageName}
+      DefinitionUri: statemachine/CreateEligibilityOrder.asl.json
+      Role: !GetAtt StepFunctionRole.Arn
+      Tracing:
+        Enabled: True
+      DefinitionSubstitutions:
+        CreateEligibilityOrderFunctionArn: !GetAtt CreateEligibilityOrderFunction.Arn
+      Tags:
+        Environment: !Sub ${StageName}
+  CreatePendingEligOrderStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub CreatePendingEligibilityOrder-${StageName}
+      DefinitionUri: statemachine/CreatePendingEligibilityOrder.asl.json
+      Role: !GetAtt StepFunctionRole.Arn
+      Tracing:
+        Enabled: True
+      DefinitionSubstitutions:
+        CreatePendingEligibilityOrderFunctionArn: !GetAtt CreatePendingEligibilityOrderFunction.Arn
+        UpdateEligibilityV2FunctionArn: !GetAtt UpdateEligibilityV2Function.Arn
+        UpdateBackEndOverridesFunctionArn: !GetAtt UpdateBackEndOverridesFunction.Arn
+        CreateOrderEventsFunctionArn: !GetAtt CreateOrderEventsFunction.Arn
+        ActivateEligibilityOrderFunctionArn: !GetAtt ActivateEligibilityOrderFunction.Arn
+        ExternalServicesFunctionArn: !GetAtt ExternalServicesFunction.Arn
+      Tags:
+        Environment: !Sub ${StageName}
+  EligPostEnrollmentStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub EligibilityPostEnrollment-${StageName}
+      DefinitionUri: statemachine/EligibilityPostEnrollment.asl.json
+      Role: !GetAtt StepFunctionRole.Arn
+      Tracing:
+        Enabled: True
+      DefinitionSubstitutions:
+        SubscribeToBrazeSubGroupFunctionArn: !GetAtt SubscribeToBrazeSubGroupFunction.Arn
+      Tags:
+        Environment: !Sub ${StageName}
+
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      ApiKeySourceType: HEADER
+      Description: An API Gateway for employers eligibility process
+      EndpointConfiguration:
+        Types:
+          - EDGE
+      Name: !Sub aws-${AWS::AccountId}-${AppId}-api-${StageName}
+
+  ApiGatewayUnlimitedUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+      - ApiGatewayProductionShopAPIKey
+    Properties:
+      ApiStages:
+        - ApiId: !Ref ApiGatewayRestApi
+          Stage: !Ref ApiGatewayStage
+      Description: Used by our internal services. Shop/SF. Max of entire account limit per second (10000 requests per second).
+      UsagePlanName: Internal - Unlimited
+
+  ApiGatewayProductionShopAPIKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+    - ApiGatewayStage
+    Properties:
+      Description: !Sub ${AppId} key - Shop ${AWS::Region} - (${StageName})
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref ApiGatewayRestApi
+          StageName: 'v1'
+
+  ApiGatewayProductionSalesForceAPIKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+    - ApiGatewayStage
+    Properties:
+      Description: !Sub ${AppId} key - SalesForce ${AWS::Region} - (${StageName})
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref ApiGatewayRestApi
+          StageName: 'v1'
+
+  ApiGatewayEngageAPIKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+    - ApiGatewayStage
+    Properties:
+      Description: !Sub ${AppId} key - Engage ${AWS::Region} - (${StageName})
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref ApiGatewayRestApi
+          StageName: 'v1'
+
+  ApiGatewayDarioAPIKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+    - ApiGatewayStage
+    Properties:
+      Description: !Sub ${AppId} key - DarioBE ${AWS::Region} - (${StageName})
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref ApiGatewayRestApi
+          StageName: 'v1'
+
+  ApiGatewayTestAutomationAPIKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+    - ApiGatewayStage
+    Properties:
+      Description: !Sub ${AppId} key - TestAutomation ${AWS::Region} - (${StageName})
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref ApiGatewayRestApi
+          StageName: 'v1'
+  
+  ApiGatewayB2CEnrollmentResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'enrollment'
+
+  ApiGatewayB2CCreateEnrollmentResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !Ref ApiGatewayB2CEnrollmentResource
+      PathPart: '{eid}'   
+
+  ApiGatewayCreateEnrollmentMethod:
+    Type: AWS::ApiGateway::Method
+    Properties: 
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayB2CCreateEnrollmentResource
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateEnrollmentFunction.Arn}/invocations'
+      OperationName: 'create enrollment'
+  
+  ApiGatewayB2CEligibilityResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'eligibility'
+
+  ApiGatewayB2CGetEligibilityResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !Ref ApiGatewayB2CEligibilityResource
+      PathPart: '{eid}'   
+
+  ApiGatewayB2CUpdateEligibilityResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !Ref ApiGatewayB2CEligibilityResource
+      PathPart: 'update'       
+
+  ApiGatewayGetEligibilityMethod:
+    Type: AWS::ApiGateway::Method
+    Properties: 
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayB2CGetEligibilityResource
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetEligibilityForB2CFunction.Arn}/invocations'
+      OperationName: 'getEligibility'
+
+  ApiGatewayB2CUpdateEligibilityMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayB2CUpdateEligibilityResource
+      HttpMethod: PUT
+      Integration:
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateEligibilityForB2CFunction.Arn}/invocations'
+      OperationName: 'updateEligibility'      
+
+  ApiGatewayDeleteEligibilityMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayB2CGetEligibilityResource
+      HttpMethod: DELETE
+      Integration:
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteEligibilityForB2CFunction.Arn}/invocations'
+      OperationName: 'deleteEligibility'      
+
+  ApiGatewayCreateEligibilityMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayB2CEligibilityResource
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateEligibilityForB2CFunction.Arn}/invocations'
+        RequestTemplates:
+          application/json: |
+            #set($requiredFields = ["firstName", "lastName", "dob", "gender", "email"])
+            #set($allowedFields = $requiredFields + ["phone"])
+            #set($inputFields = $input.json('$.data').keySet())
+            #if(!$allowedFields.containsAll($inputFields) || !$inputFields.containsAll($allowedFields))
+              {
+                "error": "INVALID_FIELDS"
+              }
+            #else
+              {
+                "accountId": "$util.escapeJavaScript($input.params('accountId'))",
+                "enrollmentEnable": $input.params('enrollmentEnable'),
+                "data": {
+                  #foreach($field in $requiredFields)
+                    "$field": $input.json("data.$field"),
+                  #end
+                  "phone": $input.json("data.phone")
+                }
+              }
+            #end
+      OperationName: 'createEligibility'
+ 
+  ProductionShopUsagePlanKey:
+    Type: 'AWS::ApiGateway::UsagePlanKey'
+    Properties:
+      KeyId: !Ref ApiGatewayProductionShopAPIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiGatewayUnlimitedUsagePlan
+
+  ProductionSalesForceUsagePlanKey:
+    Type: 'AWS::ApiGateway::UsagePlanKey'
+    Properties:
+      KeyId: !Ref ApiGatewayProductionSalesForceAPIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiGatewayUnlimitedUsagePlan
+
+  ProductionEngageUsagePlanKey:
+    Type: 'AWS::ApiGateway::UsagePlanKey'
+    Properties:
+      KeyId: !Ref ApiGatewayEngageAPIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiGatewayUnlimitedUsagePlan
+
+  ProductionDarioBEUsagePlanKey:
+    Type: 'AWS::ApiGateway::UsagePlanKey'
+    Properties:
+      KeyId: !Ref ApiGatewayDarioAPIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiGatewayUnlimitedUsagePlan
+
+  ProductionTestAutomationUsagePlanKey:
+    Type: 'AWS::ApiGateway::UsagePlanKey'
+    Properties:
+      KeyId: !Ref ApiGatewayTestAutomationAPIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiGatewayUnlimitedUsagePlan
+
+  ApiGatewayEmployerResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'employer'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayUtilsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'utils'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEmployerIDResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEmployerResource
+      PathPart: '{employer_id}'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEmployerRulesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEmployerIDResource
+      PathPart: 'eligibility_rules'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEmployerGenerateEidResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayUtilsResource
+      PathPart: 'generate-eid'
+      RestApiId: !Ref ApiGatewayRestApi      
+
+  ApiGatewayEligibilityResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEmployerIDResource
+      PathPart: 'eligibility'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEligibilityOrderResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEmployerIDResource
+      PathPart: 'order'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEligibilityPendingOrderResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEmployerIDResource
+      PathPart: 'pending-order'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayRpmResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'rpm'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayGetRpmUserResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayRpmResource
+      PathPart: 'get-user'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayAddPatientByMrnIDResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayRpmResource
+      PathPart: 'add-patient'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEligibilityIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEligibilityResource
+      PathPart: '{eligibility_id}'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEligibilitySurveyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEligibilityIdResource
+      PathPart: 'survey'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEligibilityFlowResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEligibilityIdResource
+      PathPart: 'flow'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEligibilityFlowIDResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEligibilityFlowResource
+      PathPart: '{flow_id}'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayResellerResourceV1:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'reseller'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayResellerIDResourceV1:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayResellerResourceV1
+      PathPart: '{reseller_id}'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayResellerSMALResourceV1:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayResellerIDResourceV1
+      PathPart: 'saml'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayResellerEligibilityResourceV3:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayResellerIDResourceV1
+      PathPart: 'eligibility'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySftpServersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'servers'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySftpServerIDResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySftpServersResource
+      PathPart: '{serverId}'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySftpUsersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySftpServerIDResource
+      PathPart: 'users'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySftpUsernameResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySftpUsersResource
+      PathPart: '{username}'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySftpConfigResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySftpUsernameResource
+      PathPart: 'config'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayFirewallSourcesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'sources'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayFirewallSourceNameResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayFirewallSourcesResource
+      PathPart: '{source}'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayFirewallProvisiongingResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayFirewallSourceNameResource
+      PathPart: 'provisioning'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayFirewallUserTypeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayFirewallSourceNameResource
+      PathPart: 'type'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayFirewallMessageVerifyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayFirewallSourceNameResource
+      PathPart: 'messageverify'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayVitalityFlexResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'vitality_flex'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayVitalityFlexOrderResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref  ApiGatewayVitalityFlexResource
+      PathPart: 'order'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySearchResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'search'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEmailResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'email'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayEmailSmbUpdateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayEmailResource
+      PathPart: 'smb_update'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'solera'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraMeasurementsUpdateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySoleraResource
+      PathPart: 'measurements_update'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraClinicStatusUpdateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySoleraResource
+      PathPart: 'clinic_status_update'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraMilestonesAchievedResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySoleraResource
+      PathPart: 'milestones_achieved'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraMilestoneTwoUpdateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySoleraResource
+      PathPart: 'milestone_two_update'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraMilestoneThreeUpdateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySoleraResource
+      PathPart: 'milestone_three_update'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayGetSoleraUserResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySoleraResource
+      PathPart: 'get_user'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraSendDevErrorEmailResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewaySoleraResource
+      PathPart: 'send_dev_error_email'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayCheckEligibilityMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${apiHandlerFunction.Arn}/invocations'
+      OperationName: 'checkEligibility'
+      ResourceId: !Ref ApiGatewayEligibilityResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayGetEmployerRulesMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getEmployerRulesFunction.Arn}/invocations'
+      OperationName: 'getEmployerRules'
+      ResourceId: !Ref ApiGatewayEmployerRulesResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayGenerateEidMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${generateEidFunction.Arn}/invocations'
+      OperationName: 'generateEid'
+      ResourceId: !Ref ApiGatewayEmployerGenerateEidResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayUpdateEligibilityMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${apiHandlerFunction.Arn}/invocations'
+      OperationName: 'updateEligibility'
+      ResourceId: !Ref ApiGatewayEligibilityIdResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayGetEligibilityInfoMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${apiHandlerFunction.Arn}/invocations'
+      OperationName: 'getEligibility'
+      ResourceId: !Ref ApiGatewayEligibilityIdResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayResellerCheckEligibilityMethodV3:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${apiHandlerFunction.Arn}/invocations'
+      OperationName: 'checkEligibility'
+      ResourceId: !Ref ApiGatewayResellerEligibilityResourceV3
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayAddFlowLogMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${eligibilityFlowAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'addFlowLog'
+      ResourceId: !Ref ApiGatewayEligibilityFlowIDResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayAddSurveyLogMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${eligibilitySurveyAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'addSurveyLog'
+      ResourceId: !Ref ApiGatewayEligibilitySurveyResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySftpUserAuthMethod:
+    Type: AWS::ApiGateway::Method
+    DependsOn: GetUserConfigResponseModel
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: GET
+      Integration:
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        TimeoutInMillis: 29000
+        Type: AWS
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${sftpUserPasswordAuthFunction.Arn}/invocations'
+        IntegrationResponses:
+        - StatusCode: "200"
+        RequestTemplates:
+          application/json: |
+            {
+              "username": "$util.urlDecode($input.params('username'))",
+              "password": "$util.escapeJavaScript($input.params('Password')).replaceAll("\\'","'")",
+              "protocol": "$input.params('protocol')",
+              "serverId": "$input.params('serverId')",
+              "sourceIp": "$input.params('sourceIp')"
+            }
+      RequestParameters:
+        method.request.header.Password: false
+        method.request.querystring.protocol: false
+        method.request.querystring.sourceIp: false
+      OperationName: 'authenticateUser'
+      ResourceId: !Ref ApiGatewaySftpConfigResource
+      RestApiId: !Ref ApiGatewayRestApi
+      MethodResponses:
+      - StatusCode: "200"
+        ResponseModels:
+          application/json: UserConfigResponseModel
+
+  ApiGatewayFirewallProvisiongingMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${firewallAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'createProvisioning'
+      ResourceId: !Ref ApiGatewayFirewallProvisiongingResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayFirewallUserTypeMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${firewallAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'checkType'
+      ResourceId: !Ref ApiGatewayFirewallUserTypeResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayFirewallMessageVerifyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${firewallAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'verifyMessage'
+      ResourceId: !Ref ApiGatewayFirewallMessageVerifyResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayVitalityFlexOrderMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${vitalityFlexAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'orderNotification'
+      ResourceId: !Ref ApiGatewayVitalityFlexOrderResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySendEmailUpdateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendEmailUpdateAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'email_smb_update'
+      ResourceId: !Ref ApiGatewayEmailSmbUpdateResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraMeasurementsUpdateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SoleraUpdateAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'solera_measurements'
+      ResourceId: !Ref ApiGatewaySoleraMeasurementsUpdateResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraClinicStatusUpdateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SoleraUpdateAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'solera_clinic_status'
+      ResourceId: !Ref ApiGatewaySoleraClinicStatusUpdateResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraMilestonesAchievedMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SoleraUpdateAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'solera_milestones_achieved'
+      ResourceId: !Ref ApiGatewaySoleraMilestonesAchievedResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraMilestoneTwoUpdateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SoleraUpdateAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'solera_milestone_two'
+      ResourceId: !Ref ApiGatewaySoleraMilestoneTwoUpdateResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraMilestoneThreeUpdateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SoleraUpdateAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'solera_milestone_three'
+      ResourceId: !Ref ApiGatewaySoleraMilestoneThreeUpdateResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayGetSoleraUserMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SoleraGetUserFunction.Arn}/invocations'
+      OperationName: 'get_user'
+      ResourceId: !Ref ApiGatewayGetSoleraUserResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySoleraSendDevErrorEmailMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SoleraSendDevErrorEmailFunction.Arn}/invocations'
+      OperationName: 'send_dev_error_email'
+      ResourceId: !Ref ApiGatewaySoleraSendDevErrorEmailResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySearchMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${handleAPISearchRequestFunction.Arn}/invocations'
+      OperationName: 'search'
+      ResourceId: !Ref ApiGatewaySearchResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewaySamlRedirectMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${samlRedirectAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'sso'
+      ResourceId: !Ref ApiGatewayResellerSMALResourceV1
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayCheckRpmUserMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${checkRpmAPIHandlerFunction.Arn}/invocations'
+      OperationName: 'getRpmUser'
+      ResourceId: !Ref ApiGatewayGetRpmUserResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayAddPatientByMrnIDMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${addPatientByMrnIDFunction.Arn}/invocations'
+      OperationName: 'addPatientMrn'
+      ResourceId: !Ref ApiGatewayAddPatientByMrnIDResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayPlaceOrderMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:states:action/StartExecution'
+        Type: AWS
+        RequestTemplates:
+          application/json: !Sub |-
+            {
+              "input": "{\"employer_id\":\"$util.escapeJavaScript($input.params('employer_id'))\",\"Payload\":\"$util.base64Encode($input.json('$'))\"}",
+              "name": "$context.requestId",
+              "stateMachineArn": "${EligCreateOrderStateMachine.Arn}"
+            }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: EmptyResponseModel
+      OperationName: 'order'
+      ResourceId: !Ref ApiGatewayEligibilityOrderResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayPlacePendingOrderMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:states:action/StartExecution'
+        Type: AWS
+        RequestTemplates:
+          application/json: !Sub |-
+            {
+              "input": "{\"employer_id\":\"$util.escapeJavaScript($input.params('employer_id'))\",\"Payload\":\"$util.base64Encode($input.json('$'))\"}",
+              "name": "$context.requestId",
+              "stateMachineArn": "${CreatePendingEligOrderStateMachine.Arn}"
+            }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: EmptyResponseModel
+      OperationName: 'pendingOrder'
+      ResourceId: !Ref ApiGatewayEligibilityPendingOrderResource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  GetUserConfigResponseModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      RestApiId:
+        Ref: ApiGatewayRestApi
+      ContentType: application/json
+      Description: API response for GetUserConfig
+      Name: UserConfigResponseModel
+      Schema:
+        "$schema": http://json-schema.org/draft-04/schema#
+        title: UserUserConfig
+        type: object
+        properties:
+          HomeDirectory:
+            type: string
+          Role:
+            type: string
+          Policy:
+            type: string
+          PublicKeys:
+            type: array
+            items:
+              type: string
+
+  ApiGatewayEmptyModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      Name: EmptyResponseModel
+      ContentType: 'application/json'
+      RestApiId: !Ref ApiGatewayRestApi
+      Schema: {}
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref ApiGatewayDeploymentV53
+      Description: Deployment for prod Stage
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: 'v1'
+      MethodSettings:
+      - DataTraceEnabled: true
+        HttpMethod: "*"
+        LoggingLevel: !FindInMap [EnvironmentsMap, !Ref StageName, ApiLogLevel]
+        ResourcePath: "/*"
+        MetricsEnabled: true
+
+  ApiGatewayDeploymentV53:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayCheckEligibilityMethod
+      - ApiGatewayUpdateEligibilityMethod
+      - ApiGatewayGetEligibilityInfoMethod
+      - ApiGatewayResellerCheckEligibilityMethodV3
+      - ApiGatewayAddFlowLogMethod
+      - ApiGatewayAddSurveyLogMethod
+      - ApiGatewaySftpUserAuthMethod
+      - ApiGatewayFirewallProvisiongingMethod
+      - ApiGatewayFirewallUserTypeMethod
+      - ApiGatewayFirewallMessageVerifyMethod
+      - ApiGatewayVitalityFlexOrderMethod
+      - ApiGatewaySearchMethod
+      - ApiGatewaySamlRedirectMethod
+      - ApiGatewaySendEmailUpdateMethod
+      - ApiGatewaySoleraMeasurementsUpdateMethod
+      - ApiGatewaySoleraClinicStatusUpdateMethod
+      - ApiGatewaySoleraMilestonesAchievedMethod
+      - ApiGatewaySoleraMilestoneTwoUpdateMethod
+      - ApiGatewaySoleraMilestoneThreeUpdateMethod
+      - ApiGatewayCheckRpmUserMethod
+      - ApiGatewayAddPatientByMrnIDMethod
+      - ApiGatewayGetSoleraUserMethod
+      - ApiGatewaySoleraSendDevErrorEmailMethod
+      - ApiGatewayGetEmployerRulesMethod
+      - ApiGatewayGenerateEidMethod
+      - ApiGatewayCreateEligibilityMethod
+      - ApiGatewayGetEligibilityMethod
+      - ApiGatewayDeleteEligibilityMethod
+      - ApiGatewayB2CUpdateEligibilityMethod
+      - ApiGatewayCreateEnrollmentMethod
+    Properties:
+      Description: Lambda API Deployment for prod
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt apiHandlerFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt eligibilityFlowAPIHandlerFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt eligibilitySurveyAPIHandlerFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt sftpUserPasswordAuthFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt firewallAPIHandlerFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt vitalityFlexAPIHandlerFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt handleAPISearchRequestFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt SoleraUpdateAPIHandlerFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt SendEmailUpdateAPIHandlerFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt SoleraGetUserFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt SoleraSendDevErrorEmailFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt samlRedirectAPIHandlerFunction.Arn
+              - Effect: 'Allow'
+                Action: 'states:StartExecution'
+                Resource: !GetAtt EligCreateOrderStateMachine.Arn
+              - Effect: 'Allow'
+                Action: 'states:StartExecution'
+                Resource: !GetAtt CreatePendingEligOrderStateMachine.Arn
+              - Effect: 'Allow'
+                Action: 'states:StartExecution'
+                Resource: !GetAtt EligAssignToClinicStateMachine.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt checkRpmAPIHandlerFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt addPatientByMrnIDFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt getEmployerRulesFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt generateEidFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt CreateEligibilityForB2CFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt DeleteEligibilityForB2CFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt GetEligibilityForB2CFunction.Arn
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt UpdateEligibilityForB2CFunction.Arn   
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt CreateEnrollmentFunction.Arn       
+
+  #Elastic Cache (redis)
+  ElasticCacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ElastiCache Security Group
+      VpcId:
+        !FindInMap [EnvironmentsMap, !Ref StageName, Vpc]
+      SecurityGroupIngress:
+        -
+          IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !FindInMap [EnvironmentsMap, !Ref StageName, SecurityGroup]
+      Tags:
+        -
+          Key: Name
+          Value: !Sub "${AWS::StackName}-ElastiCacheSecurityGroup"
+
+  ElasticCacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Elastic Cache Subnet Group
+      SubnetIds: !FindInMap [EnvironmentsMap, !Ref StageName, SubnetIds]
+
+  ElastiCacheCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      AutoMinorVersionUpgrade: true
+      Engine: redis
+      CacheNodeType: !FindInMap [EnvironmentsMap, !Ref StageName, RedisCacheNodeType]
+      ClusterName : !Sub "${AWS::StackName}-ElastiCache"
+      NumCacheNodes: !FindInMap [EnvironmentsMap, !Ref StageName, RedisNumCacheNodes]
+      CacheSubnetGroupName: !Ref ElasticCacheSubnetGroup
+      VpcSecurityGroupIds:
+        - !GetAtt ElasticCacheSecurityGroup.GroupId
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+
+  B2BClaimsStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./template-claims.yml
+      Parameters:
+        AppId: !Ref AppId
+        StageName: !Ref StageName
+
+  B2BAdminStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./template-admin.yml
+      Parameters:
+        AppId: !Ref AppId
+        StageName: !Ref StageName
+
+  TerminationDateLambdaRole: #logical name of the resource
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com #allow lambda to assume that role
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: "AWSLambdaVPCAccessExecutionRole"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: "Allow"
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - ec2:CreateNetworkInterface
+              - ec2:DescribeNetworkInterfaces
+              - ec2:DeleteNetworkInterface
+              - ec2:DescribeInstances
+              - ec2:AttachNetworkInterface
+              Resource: "*"
+        - PolicyName: "AWSLambdaSecretsAccessPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: "Allow"
+              Action:
+              - secretsmanager:GetSecretValue
+              Resource: "arn:aws:secretsmanager:us-east-1:139820419717:secret:*"
+        - PolicyName: allowSqs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+              - sqs:SendMessage
+              - sqs:SendMessageBatch
+              - sqs:ListQueues
+              - sqs:GetQueueUrl
+              Resource: !GetAtt EligibilityWorkerQueue.Arn
+        - PolicyName: allowSoleraSqs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - sqs:SendMessage
+              - sqs:SendMessageBatch
+              - sqs:ListQueues
+              - sqs:GetQueueUrl
+              Resource: !GetAtt SoleraDisenrollmentQueue.Arn
+  CronTerminationDate: #logical name of the resource
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/dario-user-handler.cronTerminateUserHandler
+      Description: A Lambda function that terminate users once the termination date arrives.
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt TerminationDateLambdaRole.Arn
+      Environment:
+        Variables:
+          CALLBACK_URL: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+  TerminationDateCronEvent: #logical name of the resource
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !FindInMap [EnvironmentsMap, !Ref StageName, TerminationSchedule] #when the event should trigger
+      Targets:
+        - Arn: !GetAtt CronTerminationDate.Arn
+          Id:
+            Ref: CronTerminationDate #unique name of the target
+
+  LambdaInvokePermission: #logical name of the resource
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CronTerminationDate.Arn
+      Action: lambda:InvokeFunction #allow invoking of lambda functions
+      Principal: events.amazonaws.com #grant permission to the events system
+      SourceArn: !GetAtt TerminationDateCronEvent.Arn #define which event is allowed to trigger lambdas
+
+  CronTerminationGrace: #logical name of the resource
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/dario-user-handler.cronTerminateGraceUserHandler
+      Description: A Lambda function that terminate users once the termination date arrives.
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt TerminationDateLambdaRole.Arn
+      Environment:
+        Variables:
+          CALLBACK_URL: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+  TerminationGraceCronEvent: #logical name of the resource
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !FindInMap [EnvironmentsMap, !Ref StageName, TerminationSchedule] #when the event should trigger
+      Targets:
+        - Arn: !GetAtt CronTerminationGrace.Arn
+          Id:
+            Ref: CronTerminationGrace #unique name of the target
+
+  GraceLambdaInvokePermission: #logical name of the resource
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CronTerminationGrace.Arn
+      Action: lambda:InvokeFunction #allow invoking of lambda functions
+      Principal: events.amazonaws.com #grant permission to the events system
+      SourceArn: !GetAtt TerminationGraceCronEvent.Arn #define which event is allowed to trigger lambdas
+
+  CronMinorLinkTermination: #logical name of the resource
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/dario-user-handler.cronTerminateMinorUserLinkHandler
+      Description: A Lambda function that terminate minor users once they are coming to age.
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt TerminationDateLambdaRole.Arn
+      Environment:
+        Variables:
+          CALLBACK_URL: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+
+  MinorLinkTerminationCronEvent: #logical name of the resource
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !FindInMap [EnvironmentsMap, !Ref StageName, TerminationSchedule] #when the event should trigger
+      Targets:
+        - Arn: !GetAtt CronMinorLinkTermination.Arn
+          Id:
+            Ref: CronMinorLinkTermination #unique name of the target
+
+  MinorTerminationLambdaInvokePermission: #logical name of the resource
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CronMinorLinkTermination.Arn
+      Action: lambda:InvokeFunction #allow invoking of lambda functions
+      Principal: events.amazonaws.com #grant permission to the events system
+      SourceArn: !GetAtt MinorLinkTerminationCronEvent.Arn #define which event is allowed to trigger lambdas
+
+  HandleIncrementalFilesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/s3-csv-handler.cronHandleIncrementalFiles
+      Description: A Lambda function that handle employer files in cron
+      MemorySize: 128
+      Timeout: 120
+      Environment:
+        Variables:
+          ArchiveBucket: !Sub aws-${AWS::Region}-dario-${AppId}-employerarchive-${StageName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Principal:
+            Service:
+            - "lambda.amazonaws.com"
+          Action:
+          - "sts:AssumeRole"
+      Policies:
+        # Give Read/Write Permissions to the S3 Bucket
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}
+        - S3CrudPolicy:
+            BucketName: !Sub aws-${AWS::Region}-dario-${AppId}-employerarchive-${StageName}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole
+  HandleIncrementalFilesEvent: #logical name of the resource
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !FindInMap [EnvironmentsMap, !Ref StageName, TerminationSchedule] #when the event should trigger
+      Targets:
+        -
+          Arn: !GetAtt HandleIncrementalFilesFunction.Arn #reference the lambda function by its arn
+          Id: 'HandleIncrementalFilesFunction' #unique name of the target
+          Input: !Sub "{\"bucket\":\"aws-${AWS::Region}-dario-${AppId}-employersbucket-${StageName}\"}"
+  PermissionForEventsToInvokeIncrementalLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt HandleIncrementalFilesFunction.Arn
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt HandleIncrementalFilesEvent.Arn
+
+  SoleraDisenrollmentQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      VisibilityTimeout: 60
+      Tags:
+        - Key: Environment
+          Value: !Sub ${StageName}
+
+  CronSoleraEnrollmentStatus: #logical name of the resource
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/solera-handler.cronSoleraEnrollmentStatusHandler
+      Description: A Lambda function that checks Solera users enrollment status.
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt TerminationDateLambdaRole.Arn
+      Environment:
+        Variables:
+          CALLBACK_URL: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+      Policies:
+          - AWSSecretsManagerGetSecretValuePolicy:
+              SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+          - Version: '2012-10-17' # Policy Document
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendTemplatedEmail
+                  - ses:SendRawEmail
+                  - ses:SendBulkTemplatedEmail
+                Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+          - Version: '2012-10-17' # Policy Document
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:SendMessageBatch
+                  - sqs:ListQueues
+                  - sqs:GetQueueUrl
+                Resource: !GetAtt SoleraDisenrolmentQueue.Arn
+
+  SoleraEnrollmentStatusCronEvent: #logical name of the resource
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !FindInMap [EnvironmentsMap, !Ref StageName, WeeklySchedule] #when the event should trigger
+      Targets:
+        - Arn: !GetAtt CronSoleraEnrollmentStatus.Arn
+          Id:
+            Ref: CronSoleraEnrollmentStatus #unique name of the target
+
+  SoleraEnrollmentLambdaInvokePermission: #logical name of the resource
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CronSoleraEnrollmentStatus.Arn
+      Action: lambda:InvokeFunction #allow invoking of lambda functions
+      Principal: events.amazonaws.com #grant permission to the events system
+      SourceArn: !GetAtt SoleraEnrollmentStatusCronEvent.Arn #define which event is allowed to trigger lambdas
+
+  sqsSoleraDisenrolmentHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/solera-handler.sqsDisenrolmentHandler
+      Description: A Lambda function that handles disenrollment of Solera users.
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: 128
+      Timeout: 55 # Chosen to be less than the default SQS Visibility Timeout of 30 seconds
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+      Events:
+        SimpleQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt SoleraDisenrollmentQueue.Arn
+            BatchSize: 10
+
+  SendEmailUpdateAPIHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/email-update-handler.handleAPIRequest
+      Description: A Lambda function that processes requests from the API.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+    DependsOn:
+      - LambdaExecutionRole
+
+  SoleraUpdateAPIHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/solera-handler.handleAPIRequest
+      Description: A Lambda function that processes requests from the API.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+    DependsOn:
+      - LambdaExecutionRole
+
+  CronSoleraActivitiesStatus: #logical name of the resource
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/solera-handler.cronSoleraActivitiesStatusHandler
+      Description: A Lambda function that checks Solera requetsts status.
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt TerminationDateLambdaRole.Arn
+      Environment:
+        Variables:
+          CALLBACK_URL: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+      Policies:
+          - AWSSecretsManagerGetSecretValuePolicy:
+              SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+          - Version: '2012-10-17' # Policy Document
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendTemplatedEmail
+                  - ses:SendRawEmail
+                  - ses:SendBulkTemplatedEmail
+                Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+
+  SoleraActivitiesStatusCronEvent: #logical name of the resource
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !FindInMap [EnvironmentsMap, !Ref StageName, DailySchedule] #when the event should trigger
+      Targets:
+        - Arn: !GetAtt CronSoleraActivitiesStatus.Arn
+          Id:
+            Ref: CronSoleraActivitiesStatus #unique name of the target
+
+  SoleraActivityLambdaInvokePermission: #logical name of the resource
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CronSoleraActivitiesStatus.Arn
+      Action: lambda:InvokeFunction #allow invoking of lambda functions
+      Principal: events.amazonaws.com #grant permission to the events system
+      SourceArn: !GetAtt SoleraActivitiesStatusCronEvent.Arn #define which event is allowed to trigger lambdas
+
+  CronSoleraMilestonesStatus: #logical name of the resource
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/solera-handler.cronSoleraMilestoneStatusHandler
+      Description: A Lambda function that checks Solera milestones status.
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt TerminationDateLambdaRole.Arn
+      Environment:
+        Variables:
+          CALLBACK_URL: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+      Policies:
+          - AWSSecretsManagerGetSecretValuePolicy:
+              SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+          - Version: '2012-10-17' # Policy Document
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendTemplatedEmail
+                  - ses:SendRawEmail
+                  - ses:SendBulkTemplatedEmail
+                Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+
+  SoleraMilestonesStatusCronEvent: #logical name of the resource
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !FindInMap [EnvironmentsMap, !Ref StageName, DailySchedule] #when the event should trigger
+      Targets:
+        - Arn: !GetAtt CronSoleraMilestonesStatus.Arn
+          Id:
+            Ref: CronSoleraMilestonesStatus #unique name of the target
+
+  SoleraMilestonesLambdaInvokePermission: #logical name of the resource
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CronSoleraMilestonesStatus.Arn
+      Action: lambda:InvokeFunction #allow invoking of lambda functions
+      Principal: events.amazonaws.com #grant permission to the events system
+      SourceArn: !GetAtt SoleraMilestonesStatusCronEvent.Arn #define which event is allowed to trigger lambdas
+
+  SoleraGetUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/solera-handler.getSoleraUser
+      Description: A Lambda function that gets user from Solera API.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+    DependsOn:
+      - LambdaExecutionRole
+
+  SoleraSendDevErrorEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/solera-handler.sendDevErrorEmail
+      Description: A Lambda function that sends email about failed requests to Solera API for dario dev team.
+      MemorySize: 128
+      Timeout: 60
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: 'arn:aws:secretsmanager:us-east-1:139820419717:secret:*'
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+                - ses:SendRawEmail
+                - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+      Environment:
+        Variables:
+          REDIS_URL: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+    DependsOn:
+      - LambdaExecutionRole

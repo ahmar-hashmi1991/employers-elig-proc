@@ -1,0 +1,51 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws --version
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      #- $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+      - ECR_REPOSITORY_URI=$ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      
+      - echo Install all dependencies including dependencies for running tests...
+      - npm install
+  pre_build:
+    commands:
+      - echo Build started on `date`
+      # Discover and run unit tests in the '__tests__' directory
+      - npm run test
+      # Remove all unit tests to reduce the size of the package that will be ultimately uploaded to Lambda
+      - rm -rf ./__tests__
+      # Remove all dependencies not needed for the Lambda deployment package (the packages from devDependencies in package.json)
+      - npm prune --production
+      
+      # ----- UNCOMMENT WHEN BATCH IS IN USE -----
+      #build docker image
+      # - echo Building the Docker image...
+      # - docker login -u $DOCKER_USER -p $DOCKER_PWD
+      # - docker build -t $ECR_REPOSITORY_URI:latest --build-arg BUILD_HASH=$COMMIT_HASH --build-arg stage_name=$TAGET_STAGE .
+      # - docker tag $ECR_REPOSITORY_URI:latest $ECR_REPOSITORY_URI:$IMAGE_TAG
+  build:
+    commands:
+      # Disable SAM TELEMETRY
+      - export SAM_CLI_TELEMETRY=0
+      - echo Build completed on `date`
+      # ----- UNCOMMENT WHEN BATCH IS IN USE -----
+      # - echo Pushing the Docker image...
+      # - docker push $ECR_REPOSITORY_URI:latest
+      # - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+      - printf '[{"name":"%s","imageUri":"%s"}]' $CONTAINER_NAME $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
+      
+      # Use AWS SAM to package the application by using AWS CloudFormation
+      # - aws cloudformation package --template template.yml --s3-bucket $S3_BUCKET --output-template template-export.yml
+      - echo Generating cloudformation template export...
+      - sam package --template template.yml --s3-bucket $S3_BUCKET --output-template-file template-export.yml
+artifacts:
+  type: zip
+  files:
+    - template-export.yml
+    - imagedefinitions.json

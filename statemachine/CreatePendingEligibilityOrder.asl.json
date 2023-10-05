@@ -1,0 +1,165 @@
+{
+    "Comment": "Employer eligibility - Create Pending eligibility order",
+    "StartAt": "ValidateInput",
+    "States": {
+        "ValidateInput": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "And": [
+                        {
+                            "Variable": "$.employer_id",
+                            "IsPresent": true
+                        },
+                        {
+                            "Variable": "$.Payload",
+                            "IsPresent": true
+                        }
+                    ],
+                    "Next": "CreatePendingEligibilityOrder"
+                }
+            ],
+            "Default": "Error"
+        },
+        "CreatePendingEligibilityOrder": {
+            "Type": "Task",
+            "Resource": "${CreatePendingEligibilityOrderFunctionArn}",
+            "Parameters":{
+                "employer_id.$": "$.employer_id",
+                "Payload.$": "$.Payload",
+                "ExecutionName.$": "$$.Execution.Name"
+            },
+            "Retry": [
+                {
+                  "ErrorEquals": [
+                    "OrderCreateRetryError"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+            ],
+            "ResultPath": "$.shopData",
+            "Next": "UpdateEligibilityV2"
+        },
+        "UpdateEligibilityV2": {
+            "Type": "Task",
+            "Resource": "${UpdateEligibilityV2FunctionArn}",
+            "Parameters": {
+                "shopData.$": "$.shopData",
+                "ExecutionName.$": "$$.Execution.Name"      
+            },
+            "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+            ],
+            
+            "ResultPath": "$.eligibleData",
+            "Next": "WaitStateBeforeUpdateBackEndOverrides"
+        },
+        "WaitStateBeforeUpdateBackEndOverrides": {
+            "Type": "Wait",
+            "Seconds": 15,
+            "Next": "UpdateBackEndOverrides"
+        },
+        "UpdateBackEndOverrides": {
+            "Type": "Task",
+            "Resource": "${UpdateBackEndOverridesFunctionArn}",
+            "Parameters": {
+                "eligibleData.$": "$.eligibleData",
+                "Payload.$": "$.Payload",
+                "ExecutionName.$": "$$.Execution.Name"
+            },
+            "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+            ],
+            "ResultPath": "$.backEndOverrides",
+            "Next": "CreateOrderEvents"
+        },
+        "CreateOrderEvents": {
+            "Type": "Task",
+            "Resource": "${CreateOrderEventsFunctionArn}",
+            "Parameters": {
+                "Payload.$": "$.Payload",
+                "employer_id.$": "$.employer_id",
+                "eligibleData.$": "$.eligibleData",
+                "ExecutionName.$": "$$.Execution.Name"
+            },
+            "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+            ],
+            "ResultPath": "$.orderEvents",
+            "Next": "ActivateEligibilityOrder"
+        },
+        "ActivateEligibilityOrder": {
+            "Type": "Task",
+            "Resource": "${ActivateEligibilityOrderFunctionArn}",
+            "Parameters": {
+                "Payload.$": "$.Payload",
+                "shopData.$": "$.shopData",
+                "eligibleData.$": "$.eligibleData",
+                "employer_id.$": "$.employer_id",
+                "ExecutionName.$": "$$.Execution.Name"
+            },
+            "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+            ],
+            "ResultPath": "$.activateEligibilityOrder",
+            "Next": "ExternalServices"
+        },
+        "ExternalServices": {
+            "Type": "Task",
+            "Resource": "${ExternalServicesFunctionArn}",
+            "Parameters": {
+                "Payload.$": "$.Payload",
+                "shopData.$": "$.shopData",
+                "eligibleData.$": "$.eligibleData",
+                "employer_id.$": "$.employer_id",
+                "ExecutionName.$": "$$.Execution.Name"
+            },
+            "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+            ],
+            "End": true
+        },
+        "Error": {
+            "Type": "Fail",
+            "Cause": "Invalid input payload",
+            "Error": "CreateEligibilityOrderRequestError"
+        }
+    }
+}

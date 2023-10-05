@@ -1,0 +1,17 @@
+{
+    "id" : 4,
+    "reseller_id" : 1,
+    "external_id" : "90001",
+    "client_id" : null,
+    "name" : "commscope",
+    "structure" : "{\"properties\":{\"Employee ID\":{\"anyOf\":[{\"type\":\"string\",\"minLength\":1},{\"type\":\"null\"}]},\"First Name\":{\"type\":\"string\",\"minLength\":1},\"Last Name\":{\"type\":\"string\",\"minLength\":1},\"DOB\":{\"type\":\"string\",\"minLength\":1},\"Relationship\":{\"type\":\"string\",\"minLength\":1},\"Gender\":{\"type\":\"string\",\"minLength\":1}}}",
+    "mapping_rules" : "{\"First Name\":\"first_name\",\"Last Name\":\"last_name\",\"Work Email\":{\"key\":\"email?\",\"transform\":\"lowercase\"},\"Home Phone Number\":\"phone?\",\"Employee ID\":{\"key\":\"reseller_employee_id\",\"transform\":\"inherit:Relationship\"},\"Relationship\":{\"key\":\"role\",\"default\":\"EE\"},\"Gender\":\"gender\",\"DOB\":{\"key\":\"dob\",\"transform\":\"date:'MM/DD/YYYY'\"},\"Employer Name\":\"group_name\"}",
+    "eligibility_rules" : "{\"productTypes\":[\"BG\"],\"validationFields\":[\"reseller_employee_id\",\"role\",\"dob\"]}",
+    "folder" : "commscope",
+    "ftp_info" : null,
+    "external_ftp" : null,
+    "ftp_password_creation_date" : null,
+    "support_phone" : null,
+    "support_email" : null,
+    "created_at" : "2020-11-11 09:24:16"
+}

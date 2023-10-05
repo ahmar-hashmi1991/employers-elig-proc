@@ -1,0 +1,32 @@
+---
+swagger: "2.0"
+info:
+  version: "2016-12-20T18:27:47Z"
+  title: "b2b-recocilliation-apigateway"
+basePath: "/"
+schemes:
+- "https"
+paths:
+  /cb/braze/user/export:
+    post:
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${stageVariables.LambdaFunctionName}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"

@@ -1,0 +1,1535 @@
+---
+swagger: "2.0"
+info:
+  version: "2016-12-20T18:27:47Z"
+  title: "b2b-admin-apigateway"
+basePath: "/"
+schemes:
+  - "https"
+securityDefinitions:
+  api_key:
+    type: "apiKey"
+    name: "x-api-key"
+    in: "header"
+  Bearer:
+    type: "apiKey"
+    name: "Authorization"
+    in: "header"
+  auth0_jwt:
+    type: apiKey
+    name: Authorization
+    in: header
+    x-amazon-apigateway-authtype: custom
+    x-amazon-apigateway-authorizer:
+      identitySource: method.request.header.Authorization
+      authorizerResultTtlInSeconds: 0
+      authorizerUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${JWTAuthorizerLambdaFunction.Arn}/invocations
+      authorizerCredentials:
+        Fn::Sub: arn:aws:iam::139820419717:role/${ApiGatewayIamRole}
+      type: token
+paths:
+  /login/saml:
+    get:
+      operationId: loginToBackOfficeAdminSSOWithSAML
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /files-decrypt:
+    post:
+      operationId: decryptFileAndSendHeaders
+      produces:
+        - "application/json"
+      parameters:
+        - name: somePayLoad
+          in: body
+          description: requestBody payload 
+          schema:
+            $ref: '#/definitions/DecryptFileAndSendHeaders'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+
+  /files-history:
+    get:
+      operationId: getFilesHistory
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /files-history/statistics:
+    get:
+      operationId: getFilesHistoryStatistics
+      produces:
+        - "application/json"
+      parameters:
+        - name: days
+          in: query
+          description: Identifier of employer
+          required: false
+          type: number
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        type: "aws_proxy"
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        requestParameters:
+          - integration.request.querystring.days: method.request.querystring.days
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+  /analytics/enrollments:
+    get:
+      operationId: getEnrollmentStatistics
+      produces:
+        - "application/json"
+      parameters:
+        - name: days
+          in: query
+          description: Identifier of employer
+          required: false
+          type: number
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        type: "aws_proxy"
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        requestParameters:
+          - integration.request.querystring.days: method.request.querystring.days
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+  /skus:
+    get:
+      operationId: getSkusList
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer:
+    get:
+      operationId: getEmployers
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}:
+    get:
+      operationId: getEmployerById
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}/file-history:
+    get:
+      operationId: getEmployerFileHistory
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}/sftp:
+    get:
+      operationId: fetchSftpList
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+    post:
+      operationId: createSftpUser
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}/sftp/delete:
+    post:
+      operationId: deleteSftpUser
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for employer to delete sftp users
+          schema:
+            $ref: '#/definitions/SftpData'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}/sftp/ip:
+    post:
+      operationId: updateSftpUserIp
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for employer to update sftp user ip
+          schema:
+            $ref: '#/definitions/SftpIpData'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}/file-history/{histId}:
+    get:
+      operationId: getEmployerFileHistoryLog
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+        - name: histId
+          in: path
+          description: Identifier of file history
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - api_key: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}/history:
+    get:
+      operationId: getEmployerChangeHistory
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /reseller:
+    get:
+      operationId: getResellerList
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+    post:
+      operationId: createReseller
+      produces:
+        - "application/json"
+      parameters:
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for create reseller
+          schema:
+            $ref: '#/definitions/Reseller'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /reseller/{resellerId}/history:
+    get:
+      operationId: getResellerHistoryById
+      produces:
+        - "application/json"
+      parameters:
+        - name: resellerId
+          in: path
+          description: Identifier of reseller ID
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /reseller/{resellerId}:
+    post:
+      operationId: updateReseller
+      produces:
+        - "application/json"
+      parameters:
+        - name: resellerId
+          in: path
+          description: Identifier of reseller ID
+          required: true
+          type: string
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for update reseller
+          schema:
+            $ref: '#/definitions/Reseller'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+    get:
+      operationId: getResellerByExternalId
+      produces:
+        - "application/json"
+      parameters:
+        - name: resellerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /reseller/{resellerId}/employer:
+    post:
+      operationId: createNewEmployer
+      produces:
+        - "application/json"
+      parameters:
+        - name: resellerId
+          in: path
+          description: Identifier of the reseller
+          required: true
+          type: string
+        - name: somePayload
+          in: body
+          description: requestBody payload for creating New employer
+          schema:
+            $ref: '#/definitions/Employers'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /reseller/{resellerId}/employer/{externalId}:
+    post:
+      operationId: updateEmployer
+      produces:
+        - "application/json"
+      parameters:
+        - name: resellerId
+          in: path
+          description: Identifier of the reseller
+          required: true
+          type: string
+        - name: externalId
+          in: path
+          description: Identifier of the employer
+          required: true
+          type: string
+        - name: somePayload
+          in: body
+          description: requestBody payload for updating existing employer
+          schema:
+            $ref: '#/definitions/Employers'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}/enrollment-setup:
+    get:
+      operationId: getEnrollmentSetupById
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - api_key: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+    post:
+      operationId: updateEnrollmentSetupById
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for create reseller
+          schema:
+            $ref: '#/definitions/EnrollmentSetup'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - api_key: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /reseller/{resellerId}/employer/{externalId}/export:
+    post:
+      operationId: exportEmployerResellerData
+      produces:
+        - "application/json"
+      parameters:
+        - name: resellerId
+          in: path
+          description: Identifier of the reseller
+          required: true
+          type: string
+        - name: externalId
+          in: path
+          description: Identifier of the employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - api_key: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/import:
+    post:
+      operationId: importEmployer
+      produces:
+        - "application/json"
+      parameters:
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for upload employer & reseller tables
+          schema:
+            $ref: '#/definitions/EmployerImport'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}/upload:
+    post:
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: External ID of employer
+          required: true
+          type: string
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for upload employer & reseller file
+          schema:
+            $ref: '#/definitions/EmployerFileUpload'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${EmployerFileUpload}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        request:
+          requestParameters:
+            method.request.header.Content-Type: "'multipart/form-data'"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+            # NOTE: Replace <<region>> and <<account>> fields
+          passthroughBehavior: "when_no_match"
+          httpMethod: "POST"
+          type: "aws_proxy"
+        x-amazon-apigateway-binary-media-types:
+          - multipart/form-data
+          - image/jpeg
+          - image/png
+  /employer/{employerId}/download:
+    get:
+      consumes:
+        - "application/json"
+      produces:
+        - "multipart/form-data"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${EmployerFileDownload}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'multipart/form-data'"
+          # NOTE: Replace <<region>> and <<account>> fields
+          passthroughBehavior: "when_no_match"
+          httpMethod: "POST"
+          type: "aws_proxy"
+  /employer/{employerId}/remove:
+    delete:
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of employer
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${EmployerFileRemove}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+          # NOTE: Replace <<region>> and <<account>> fields
+          passthroughBehavior: "when_no_match"
+          httpMethod: "POST"
+          type: "aws_proxy"
+  /employer/{employerId}/deactivate:
+    post:
+      operationId: deactivateEmployer
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of the Employer
+          required: true
+          type: string
+        - name: somePayload
+          in: body
+          description: requestBody payload for deactivating employer
+          schema:
+            $ref: '#/definitions/EmployerStatus'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/{employerId}/delete-test-users:
+    post:
+      operationId: deleteTestUsers
+      produces:
+        - "application/json"
+      parameters:
+        - name: employerId
+          in: path
+          description: Identifier of the Employer
+          required: true
+          type: string
+        - name: somePayload
+          in: body
+          description: requestBody payload for deleting a test user (OPTIONAL <> Default == delete)
+          schema:
+            $ref: '#/definitions/EmployerStatus'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/create-s3-folder:
+    post:
+      produces:
+        - "application/json"
+      parameters:
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for sftp employer to create folder structure in S3
+          schema:
+            $ref: '#/definitions/EmployerSFTPData'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${SftpUserFolderCreation}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /employer/create-eligibility-s3-folder:
+    post:
+      produces:
+        - "application/json"
+      parameters:
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for employer to create folder structure for eligibility file upload in S3
+          schema:
+            $ref: '#/definitions/EmpEligS3Data'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: [ ]
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${EmpEligS3FolderCreation}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /user:
+    get:
+      operationId: getUsers
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+    post:
+      operationId: createUser
+      produces:
+        - "application/json"
+      parameters:
+        - name: somePayLoad
+          in: body
+          description: requestBody payload for create user
+          schema:
+            $ref: '#/definitions/User'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /user/{userId}:
+    get:
+      operationId: getUserById
+      produces:
+        - "application/json"
+      parameters:
+        - name: userId
+          in: path
+          description: Identifier of user
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+    post:
+      operationId: updateUser
+      produces:
+        - "application/json"
+      parameters:
+        - name: userId
+          in: path
+          description: Identifier of user
+          required: true
+          type: string
+        - name: somePayLoad
+          in: body
+          description: requestBody payload to update user
+          schema:
+            $ref: '#/definitions/User'
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /user-login/{userId}:
+    post:
+      operationId: updateUserLogin
+      produces:
+        - "application/json"
+      parameters:
+        - name: userId
+          in: path
+          description: Identifier of user
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /user-details/{email}:
+    get:
+      operationId: getUserByEmail
+      produces:
+        - "application/json"
+      parameters:
+        - name: email
+          in: path
+          description: Email of user
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /user-roles:
+    get:
+      operationId: getUserRoles
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Content-Type:
+              type: "string"
+      security:
+        - auth0_jwt: []
+      x-amazon-apigateway-integration:
+        credentials:
+          Fn::Sub: "arn:aws:iam::139820419717:role/${ApiGatewayIamRole}"
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Content-Type: "'application/json'"
+        # NOTE: Replace <<region>> and <<account>> fields
+        uri:
+          Fn::Sub: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:139820419717:function:${AdminHandlerLambdaFunction}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+definitions:
+  Reseller:
+    type: object
+    properties:
+      name:
+        type: string
+      description:
+        type: string
+      eligibility_rules:
+        type: object
+        properties:
+          productTypes:
+            type: array
+            items:
+              type: string
+          validationFields:
+            type: array
+            items:
+              type: string
+      configurations:
+        type: object
+        properties:
+          sku_mappings:
+            type: object
+          sso:
+            type: object
+            properties:
+              cert_filename:
+                type: string
+          autoAssignPCP :
+            type : string
+      support_phone:
+        type: string
+      support_email:
+        type: string
+      b2b_link:
+        type: string
+      kickoff_link:
+        type: string
+      epic_link:
+        type: string
+  Employers:
+    type: object
+    properties:
+      name:
+        type: string
+      reseller_id:
+        type: string
+      folder:
+        type: string
+      file_name_filter:
+        type: string
+      support_phone:
+        type: string
+      support_email:
+        type: string
+      status:
+        type: string
+      external_ftp:
+        type: boolean
+      ftp_info:
+        type: string
+      mapping_rules:
+        type: string
+      eligibility_rules:
+        type: string
+      file_validation:
+        type: string
+      file_mapping:
+        type: string
+      record_source:
+        type: string
+      enrollment-setup:
+        type: string
+      b2b_link:
+        type: string
+      kickoff_link:
+        type: string
+      epic_link:
+        type: string
+      sftp_info:
+        type: string
+  EnrollmentSetup:
+    type: object
+  EmployerImport:
+    type: object
+    properties:
+      file:
+        type: string
+  EmployerFileUpload:
+    type: object
+    properties:
+      fileData:
+        type: string
+      contentType:
+        type: string
+      fileName:
+        type: string
+  EmployerSFTPData:
+    type: object
+    properties:
+      username:
+        type: string
+      employer_id:
+        type: string
+  SftpData:
+    type: object
+    properties:
+      sftp_user_id:
+        type: string
+  SftpIpData:
+    type: object
+    properties:
+      ip:
+        type: string
+  EmpEligS3Data:
+    type: object
+    properties:
+      employer_id:
+        type: string
+      contentType:
+        type: string
+      fileData:
+        type: string
+      fileName:
+        type: string
+  EmployerStatus:
+    type: object
+    properties:
+      status:
+        type: string
+  DecryptFileAndSendHeaders:
+    type: object
+    properties:
+      fileData:
+        type: string
+      contentType:
+        type: string
+      fileName:
+        type: string
+  User:
+    type: object
+    properties:
+      email:
+        type: string
+      role:
+        type: string
+      added_in_sso:
+        type: boolean

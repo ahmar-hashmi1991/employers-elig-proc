@@ -1,0 +1,51 @@
+{
+    "Comment": "Employer eligibility - Create eligibility order",
+    "StartAt": "ValidateInput",
+    "States": {
+        "ValidateInput": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "And": [
+                        {
+                            "Variable": "$.employer_id",
+                            "IsPresent": true
+                        },
+                        {
+                            "Variable": "$.Payload",
+                            "IsPresent": true
+                        }
+                    ],
+                    "Next": "CreateEligibilityOrder"
+                }
+            ],
+            "Default": "Error"
+        },
+        "CreateEligibilityOrder": {
+            "Type": "Task",
+            "Resource": "${CreateEligibilityOrderFunctionArn}",
+            "Parameters":{
+                "employer_id.$": "$.employer_id",
+                "Payload.$": "$.Payload",
+                "ExecutionName.$": "$$.Execution.Name"
+            },
+            "Retry": [
+                {
+                  "ErrorEquals": [
+                    "OrderCreateRetryError"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+            ],
+            "ResultPath": "$.order",
+            "End": true
+        },
+        "Error": {
+            "Type": "Fail",
+            "Cause": "Invalid input payload",
+            "Error": "CreateEligibilityOrderRequestError"
+        }
+    }
+}

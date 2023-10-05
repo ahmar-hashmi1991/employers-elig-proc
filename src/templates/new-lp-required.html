@@ -1,0 +1,30 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+    <html xmlns="http://www.w3.org/1999/xhtml" lang="en-US">
+        <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+            <title>Admin tool notification: a new LP is required</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+            <style>
+            table, th, td {border: 0;border-collapse: collapse;mso-table-tspace: 0pt !important;mso-table-top: 0pt !important;}
+            th {background-color: #ffca99;}
+            th, td {padding: 5px;text-align: left;font-size: 14px;}
+            </style>
+        </head>
+        <body style="margin: 0; padding: 0;">
+            <table align="left" border="0" cellpadding="0" cellspacing="0" width="600" style="border-collapse: collapse;">
+                <tr><td><h2>Hello,</h2></td></tr>
+                <tr><td><h2>There is a new account which requires the creation of a dedicated LP.</h2></td></tr>
+                <tr><td><h2>The account URL is: {{lp_url}}</h2></td></tr>
+                <!-- <tr><td>
+                    <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%">
+                        <tr><td colspan="2" style="background-color: black;height: 2px;padding: 0;"></td></tr>
+                        <tr><th>Reseller name:</th><th>{{reseller}}</th></tr>
+                        <tr><th>Employer name:</th><th>{{employer_name}}</th></tr>
+                        <tr><th>Please start working on it, launch date:</th><th>{{launch_date}}</th></tr>
+                    </table>
+                </td></tr> -->
+                <tr><td><h2>Thank you in advance,</h2></td></tr>
+                <tr><td><h2>{{user_name}}</h2></td></tr>
+            </table>
+        </body>
+    </html>

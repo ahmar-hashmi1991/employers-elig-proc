@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" Destination="https://ep-api.stage.mobile-glucometer.com/reseller/1W85pu/saml" ID="ID_84869ccd-9e8d-46d7-ad37-a0d56dd9a69f" IssueInstant="2021-11-21T12:06:55.049Z" Version="2.0">
+    <saml:Issuer>https://iam.stage2.virginpulse.com/auth/realms/virginpulse</saml:Issuer>
+    <dsig:Signature xmlns:dsig="http://www.w3.org/2000/09/xmldsig#">
+        <dsig:SignedInfo>
+            <dsig:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" />
+            <dsig:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256" />
+            <dsig:Reference URI="#ID_84869ccd-9e8d-46d7-ad37-a0d56dd9a69f">
+                <dsig:Transforms>
+                    <dsig:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" />
+                    <dsig:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" />
+                </dsig:Transforms>
+                <dsig:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256" />
+                <dsig:DigestValue>RJaZkJIIRDyi4C0l59sgVzdeBjbXpA/ZyIs5dfNGqfQ=</dsig:DigestValue>
+            </dsig:Reference>
+        </dsig:SignedInfo>
+        <dsig:SignatureValue>dItEcHVGASwO5o1ohMtawBiN5veq6oE7ei9wQjJzfyT0BqlO4UDQ0PcLqlqpZPWZNkCW1i+4Lmh5ibxqiHFsbAkWWCuolnzQEsexzKAA3s6KeA3N1hc0O4c4m8UrmXfbnqR1H50KLCulsrC+o1JVBhhrCYQKlM5MzEdv++ta/WqhR2n27N0yOinCiggrAiazZnnQjMcvAreQCyz9eVnvtoDYQSunVmTBdTPnjyUoX0zNs5pdrdraFIrqb0bdrKbYKZKlZddptGEuStqjxEzdFRv4Ms69tgqbYIjPcTHJ1XY/Rw5kj0crL3W+KUNkTQvF0mXLEGM9jFpjrKf+5iMeCg==</dsig:SignatureValue>
+        <dsig:KeyInfo>
+            <dsig:KeyName>j84L0OlAvZPWrIS1Ii8QjilqjkviMmeuP5STdKJGVZU</dsig:KeyName>
+            <dsig:X509Data>
+                <dsig:X509Certificate>MIIFNDCCBBygAwIBAgIQC4BphhMN6JkcdxL6/7xyOzANBgkqhkiG9w0BAQsFADByMQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGlnaWNlcnQuY29tMTEwLwYDVQQDEyhEaWdpQ2VydCBTSEEyIEFzc3VyZWQgSUQgQ29kZSBTaWduaW5nIENBMB4XDTIwMDcyOTAwMDAwMFoXDTIyMDgwMzEyMDAwMFowcTELMAkGA1UEBhMCVVMxFTATBgNVBAgTDFJob2RlIElzbGFuZDETMBEGA1UEBxMKUHJvdmlkZW5jZTEaMBgGA1UEChMRVmlyZ2luIFB1bHNlLCBJbmMxGjAYBgNVBAMTEVZpcmdpbiBQdWxzZSwgSW5jMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApfO1/c21ugyd5p2oa4apSGbZJZSzbCAtMXxJH1blImfE+7XAhDThrPQuPYiLLnDzJCJ7Yczi4R1KVLnwgw7c8SS59ofnSspuHfMsGj3wVrZyoRP0pJHGDuMruGAq84JDbkJUlZsjhZUQfAa9ZbaHjlFZP11GtXNYOukgve3ydsM+QxXlLJIPt1qqVaosZjCs7t8VZX5J5FHFinNZhC5DmMAx2vPB+t+KTuda6m3urAhxYgZ9JzJOxze6aKqxaGeu5gHqV/TYHfg4a11hCitzWN6LfoBnJzvAv7OCWIZSDITkQRHv5OI32f0KDIN//s7LFoIYl2yqaRLMgl8EjSsvpQIDAQABo4IBxTCCAcEwHwYDVR0jBBgwFoAUWsS5eyoKo6XqcQPAYPkt9mV1DlgwHQYDVR0OBBYEFKwLm+f8M4Pm4e68jaSRyPDwT5VBMA4GA1UdDwEB/wQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAzB3BgNVHR8EcDBuMDWgM6Axhi9odHRwOi8vY3JsMy5kaWdpY2VydC5jb20vc2hhMi1hc3N1cmVkLWNzLWcxLmNybDA1oDOgMYYvaHR0cDovL2NybDQuZGlnaWNlcnQuY29tL3NoYTItYXNzdXJlZC1jcy1nMS5jcmwwTAYDVR0gBEUwQzA3BglghkgBhv1sAwEwKjAoBggrBgEFBQcCARYcaHR0cHM6Ly93d3cuZGlnaWNlcnQuY29tL0NQUzAIBgZngQwBBAEwgYQGCCsGAQUFBwEBBHgwdjAkBggrBgEFBQcwAYYYaHR0cDovL29jc3AuZGlnaWNlcnQuY29tME4GCCsGAQUFBzAChkJodHRwOi8vY2FjZXJ0cy5kaWdpY2VydC5jb20vRGlnaUNlcnRTSEEyQXNzdXJlZElEQ29kZVNpZ25pbmdDQS5jcnQwDAYDVR0TAQH/BAIwADANBgkqhkiG9w0BAQsFAAOCAQEAhD8BhlgXjTBQg2rG8seiN372KSQ2tsa1Oo8xRTScZD0RsrFFInV5c5vkWc/0i303oP9x7udmp0eOMUz47SJNKj9D0LrJcHNyVsQR0MCtkW5pLUA+JA1rLdO8WjlD5zEX3D/vjIxjiCCJ2o8oZ6TG03DZWq3F0tgacYXyLC2DytvUjU23w47/RyhNK4pR2AZXsOnyltHtsgsm4knlUL68z8QH2HDMWMk7rDwxYza1wScLC1xdYpmSCP5Dc8cNkicX7VqbJaHD/t0D/rUUZeCPfCNntD90oW1S+XdbnPvlNC374nmtKPbYE2PZx7qV0aH5p4RaydZRs5Xos3ThrbK2Uw==</dsig:X509Certificate>
+            </dsig:X509Data>
+            <dsig:KeyValue>
+                <dsig:RSAKeyValue>
+                    <dsig:Modulus>pfO1/c21ugyd5p2oa4apSGbZJZSzbCAtMXxJH1blImfE+7XAhDThrPQuPYiLLnDzJCJ7Yczi4R1KVLnwgw7c8SS59ofnSspuHfMsGj3wVrZyoRP0pJHGDuMruGAq84JDbkJUlZsjhZUQfAa9ZbaHjlFZP11GtXNYOukgve3ydsM+QxXlLJIPt1qqVaosZjCs7t8VZX5J5FHFinNZhC5DmMAx2vPB+t+KTuda6m3urAhxYgZ9JzJOxze6aKqxaGeu5gHqV/TYHfg4a11hCitzWN6LfoBnJzvAv7OCWIZSDITkQRHv5OI32f0KDIN//s7LFoIYl2yqaRLMgl8EjSsvpQ==</dsig:Modulus>
+                    <dsig:Exponent>AQAB</dsig:Exponent>
+                </dsig:RSAKeyValue>
+            </dsig:KeyValue>
+        </dsig:KeyInfo>
+    </dsig:Signature>
+    <samlp:Status>
+        <samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success" />
+    </samlp:Status>
+    <saml:Assertion xmlns="urn:oasis:names:tc:SAML:2.0:assertion" ID="ID_893d4edf-7327-4272-8173-9bca28a0dd00" IssueInstant="2021-11-21T12:06:55.049Z" Version="2.0">
+        <saml:Issuer>https://iam.stage2.virginpulse.com/auth/realms/virginpulse</saml:Issuer>
+        <saml:Subject>
+            <saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent">G-d65318f3-7fc9-4703-b66d-25dc19f9dc83</saml:NameID>
+            <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+                <saml:SubjectConfirmationData NotOnOrAfter="2021-11-21T12:11:53.049Z" Recipient="https://ep-api.stage.mobile-glucometer.com/reseller/1W85pu/saml" />
+            </saml:SubjectConfirmation>
+        </saml:Subject>
+        <saml:Conditions NotBefore="2021-11-21T12:06:53.049Z" NotOnOrAfter="2021-11-21T12:07:53.049Z">
+            <saml:AudienceRestriction>
+                <saml:Audience>dariohealth_stage</saml:Audience>
+            </saml:AudienceRestriction>
+        </saml:Conditions>
+        <saml:AuthnStatement AuthnInstant="2021-11-21T12:06:55.050Z" SessionIndex="0238aae8-9003-4403-b23e-ce1696c0477b::dc7ccd40-16cd-4ff1-b800-e92518a6515b">
+            <saml:AuthnContext>
+                <saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified</saml:AuthnContextClassRef>
+            </saml:AuthnContext>
+        </saml:AuthnStatement>
+        <saml:AttributeStatement>
+            <saml:Attribute FriendlyName="employee_id" Name="employee_id" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">489320</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute FriendlyName="external_id" Name="external_id" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">57686ea8ab7341fa930a0f50c06491c1</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute FriendlyName="employer_id" Name="employer_id" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">24025</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">manage-account</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">public</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">offline_access</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">manage-account-links</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">events</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">activities</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">biometrics</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">uma_authorization</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+                <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">view-profile</saml:AttributeValue>
+            </saml:Attribute>
+        </saml:AttributeStatement>
+    </saml:Assertion>
+</samlp:Response>

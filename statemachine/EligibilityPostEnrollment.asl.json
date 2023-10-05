@@ -1,0 +1,26 @@
+{
+    "Comment": "Employer eligibility - post enrollment activities",
+    "StartAt": "WaitStateBeforeBrazeSubscriptionGroup",
+    "States": {
+      "WaitStateBeforeBrazeSubscriptionGroup": {
+        "Type": "Wait",
+        "Seconds": 60,
+        "Next": "Subscribe To Braze Subscription Group"
+    },
+    "Subscribe To Braze Subscription Group": {
+        "Type": "Task",
+        "Resource": "${SubscribeToBrazeSubGroupFunctionArn}",
+        "Retry": [
+            {
+              "ErrorEquals": [
+                "States.ALL"
+              ],
+              "IntervalSeconds": 30,
+              "MaxAttempts": 2,
+              "BackoffRate": 2
+            }
+        ],
+        "End": true
+    }
+  }
+}

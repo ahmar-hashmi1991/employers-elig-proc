@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  AppId:
+    Type: String
+  StageName:
+    Type: String
+    Default: stage
+    AllowedValues: 
+      - dev
+      - stage
+      - prod
+    Description: Environment type - development (dev), staging (stage), production (prod)
+  NotificationSender: 
+    Type: String
+  NotificationEmail:
+    Type: String
+
+Mappings: 
+  EnvironmentsMap: 
+    stage:
+      Vpc: vpc-0dc99230247364f7d
+      SecurityGroup: sg-0ab8a6880c28a7e48 # employers-lambda-stage-sg
+      SubnetIds:
+        - subnet-02827805ebcfe4336 # dh-shops-stage-private1
+        - subnet-05724c0275b21e79f # dh-shops-stage-private2
+      ReportScedule: cron(0 6 ? * SUN *)
+    prod:
+      Vpc: vpc-0cdb651f311675911
+      SecurityGroup: sg-0b8996e87f8f4c23e
+      SubnetIds:
+        - subnet-0c7c916020af48a64 # dh-shops-private1
+        - subnet-018cf5c8a1974664b # dh-shops-private2
+      ReportScedule: cron(0 8 * * ? *)
+
+Globals:
+  Function:
+    PermissionsBoundary: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/${AppId}-${AWS::Region}-PermissionsBoundary'
+    Runtime: nodejs16.x
+    Environment:
+        Variables:
+          STAGE: !Ref StageName
+          SES_FROM_EMAIL: !Ref NotificationSender
+          SES_TO_EMAIL: !Ref NotificationEmail
+    Tags:
+        Environment: !Sub ${StageName}
+    VpcConfig:
+        SecurityGroupIds:
+          - !FindInMap [EnvironmentsMap, !Ref StageName, SecurityGroup]
+        SubnetIds: !FindInMap [EnvironmentsMap, !Ref StageName, SubnetIds]
+
+Resources:
+  ReconciliationLambdaRole: #logical name of the resource
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com #allow lambda to assume that role
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: "AWSLambdaVPCAccessExecutionRole"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: "Allow"
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - ec2:CreateNetworkInterface
+              - ec2:DescribeNetworkInterfaces
+              - ec2:DeleteNetworkInterface
+              - ec2:DescribeInstances
+              - ec2:AttachNetworkInterface
+              Resource: "*"
+        - PolicyName: "AWSLambdaSecretsAccessPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: "Allow"
+              Action:
+              - secretsmanager:GetSecretValue
+              Resource: "arn:aws:secretsmanager:us-east-1:139820419717:secret:*"
+        - PolicyName: "AWSLambdaSendEmailPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: "Allow"
+              Action:
+              - ses:SendEmail
+              - ses:SendTemplatedEmail
+              - ses:SendRawEmail
+              - ses:SendBulkTemplatedEmail
+              Resource: arn:aws:ses:us-east-1:139820419717:identity/*
+
+  CronReconciliationFunction: #logical name of the resource
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/reconciliation-report-handler.cronHandler
+      Description: A Lambda function that generates daily report.
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt ReconciliationLambdaRole.Arn
+      Environment:
+        Variables:
+          CALLBACK_URL: !Sub https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+  CronEvent: #logical name of the resource
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !FindInMap [EnvironmentsMap, !Ref StageName, ReportScedule] #when the event should trigger
+      Targets:
+        - Arn: !GetAtt CronReconciliationFunction.Arn
+          Id:
+            Ref: CronReconciliationFunction #unique name of the target
+  
+  LambdaInvokePermission: #logical name of the resource
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CronReconciliationFunction.Arn
+      Action: lambda:InvokeFunction #allow invoking of lambda functions
+      Principal: events.amazonaws.com #grant permission to the events system
+      SourceArn: !GetAtt CronEvent.Arn #define which event is allowed to trigger lambdas
+
+  # Braze Callback Handler
+  BrazeCallbackLambdaFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: src/handlers/reconciliation-report-handler.handleUsersExport
+      CodeUri: ./
+      Description: Lambda handler for API Gateway - Twilio integration
+      MemorySize: 256
+      Timeout: 60
+      Role: !GetAtt ReconciliationLambdaRole.Arn
+      Events:
+        BrazeCallbackApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /cb/braze/user/export
+            Method: POST
+
+  # Braze Callback API
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub aws-b2b-reconciliation-${StageName}-apis
+      OpenApiVersion: '2.0'
+      DefinitionUri: ./swagger.yml
+      StageName: !Sub ${StageName}
+      Variables:
+        # NOTE: Before using this template, replace the <<region>> and <<account>> fields
+        #       in Lambda integration URI in the swagger file to region and accountId 
+        #       you are deploying to
+        LambdaFunctionName: !Ref BrazeCallbackLambdaFunction
+
+Outputs:
+  ReconciliationApiUrl:
+    Description: URL of your API endpoint
+    Value: !Join
+      - ''
+      - - https://
+        - !Ref ApiGatewayApi
+        - '.execute-api.'
+        - !Ref 'AWS::Region'
+        - '.amazonaws.com/'
+        - !Sub ${StageName}
+    Export:
+      Name: !Sub b2b-reconciliation-${StageName}:ApiUrl

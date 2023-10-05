@@ -1,0 +1,174 @@
+
+{
+  "Comment": "Employer eligibility - Create dario user state machine",
+  "StartAt": "CreateDarioUserProcess",
+  "States": {
+    "CreateDarioUserProcess": {
+      "Type" : "Choice",
+      "Choices": [
+        {
+          "Variable": "$.isMinor",
+          "BooleanEquals": true,
+          "Next": "CreateDarioUserForMinor"
+        },
+        {
+          "Variable": "$.isMinor",
+          "BooleanEquals": false,
+          "Next": "CreateDarioUser"
+        }
+      ],
+      "Default": "CreateDarioUser"
+    },
+    "CreateDarioUser": {
+      "Type": "Task",
+      "Resource": "${CreateDarioUserFunctionArn}",
+      "Parameters": {
+          "shopdata.$": "$.shopdata",
+          "eligibility.$": "$.eligibility"
+      },
+      "Retry": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "IntervalSeconds": 30,
+            "MaxAttempts": 2,
+            "BackoffRate": 2
+          }
+      ],
+      "Next": "DarioUserMembership",
+      "ResultPath": null
+    },
+    "CreateDarioUserForMinor": {
+      "Type": "Task",
+      "Resource": "${CreateDarioUserForMinorFunctionArn}",
+      "Parameters": {
+          "shopdata.$": "$.shopdata",
+          "eligibility.$": "$.eligibility",
+          "rules.$": "$.rules"
+      },
+      "Retry": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "IntervalSeconds": 30,
+            "MaxAttempts": 2,
+            "BackoffRate": 2
+          }
+      ],
+      "Next": "DarioUserMembership",
+      "ResultPath": null
+    },
+    "DarioUserMembership": {
+      "Type": "Task",
+      "Resource": "${DarioUserMembershipFunctionArn}",
+      "Parameters": {
+          "shopdata.$": "$.shopdata",
+          "eligibility.$": "$.eligibility",
+          "rules.$": "$.rules",
+          "isMinor.$": "$.isMinor"
+      },
+      "Retry": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ], 
+            "IntervalSeconds": 30,
+            "MaxAttempts": 2,
+            "BackoffRate": 2
+          }
+      ],
+      "Next": "mapTargetsForAssignToClinic",
+      "ResultPath": null
+    },
+    "mapTargetsForAssignToClinic": {
+      "Type": "Map",
+      "ItemsPath": "$.targets",
+      "MaxConcurrency": 0,
+      "Parameters": {
+        "target.$": "$$.Map.Item.Value",
+        "email.$": "$.email",
+        "eligibility.$": "$.eligibility"
+      },
+      "Iterator":{
+        "StartAt": "AssignToClinicFunction",
+        "States": {
+            "AssignToClinicFunction": {
+                "Type": "Task",
+                "Resource": "${APIHandlerAssignToClinicFunctionArn}",
+                "ResultPath": "$.assigned",
+                "Next": "FilterProductType"
+            },
+            "FilterProductType": {
+                "Type" : "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.target.system",
+                    "StringEquals": "wayforward",
+                    "Next": "ProvisionToWayforward"
+                  },
+                  {
+                    "Variable": "$.target.system",
+                    "StringEquals": "upright",
+                    "Next": "WaitStateBeforeProvisionToMSK"
+                  }
+                ],
+                "Default": "Finish"
+              },
+            "Finish": {
+                "Type": "Succeed"
+            },
+            "ProvisionToWayforward": {
+                "Type": "Task",
+                "Resource": "${ProvisionToWayforwardFunctionArn}",
+                "Parameters": {
+                    "email.$": "$.email",
+                    "target.$": "$.target",
+                    "assigned.$": "$.assigned",
+                    "eligibility.$": "$.eligibility"
+                },
+                "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "States.ALL"
+                      ],
+                      "IntervalSeconds": 30,
+                      "MaxAttempts": 2,
+                      "BackoffRate": 2
+                    }
+                ],
+                "End": true
+            },
+            "WaitStateBeforeProvisionToMSK": {
+                "Type": "Wait",
+                "Seconds": 60,
+                "Next": "ProvisionToMSK"
+            },
+            "ProvisionToMSK": {
+                "Type": "Task",
+                "Resource": "${ProvisionToMSKFunctionArn}",
+                "Parameters": {
+                    "email.$": "$.email",
+                    "target.$": "$.target",
+                    "assigned.$": "$.assigned",
+                    "eligibility.$": "$.eligibility"
+                },
+                "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "States.ALL"
+                      ],
+                      "IntervalSeconds": 30,
+                      "MaxAttempts": 2,
+                      "BackoffRate": 2
+                    }
+                ],
+                "End": true
+            }
+        }
+      },
+      "End": true
+    }
+  }
+}
